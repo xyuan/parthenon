@@ -383,10 +383,6 @@ do
     shared_versioned_libraries_host="$shared_versioned_libraries_host $1"
     shared_versioned_libraries="$shared_versioned_libraries -Xlinker $1"
   ;;
-  # the -V flag causes an issue with OpenMP detection when the underlying compiler is
-  # xlc++, so just drop this flag
-  # -V)
-  # ;;
   #All other args are sent to the host compiler
   *)
     if [ $first_xcompiler_arg -eq 1 ]; then
