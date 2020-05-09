@@ -221,6 +221,20 @@ class Metadata {
     return std::any_of(flags.begin(), flags.end(),
                        [this](MetadataFlag const &f) { return IsSet(f); });
   }
+  /**
+   * @brief Returns true if all flags are set
+   */
+  bool AllFlagsSet(std::vector<MetadataFlag> const &flags) const {
+    return std::all_of(flags.begin(), flags.end(),
+                       [this](MetadataFlag const &f) { return IsSet(f); });
+  }
+  /**
+   * @brief Returns true if no flags are set
+   */
+  bool NoFlagsSet(std::vector<MetadataFlag> const &flags) const {
+    return std::all_of(flags.begin(), flags.end(),
+                       [this](MetadataFlag const &f) { return !IsSet(f); });
+  }
 
   /// returns true if bit is set, false otherwise
   bool IsSet(MetadataFlag bit) const {

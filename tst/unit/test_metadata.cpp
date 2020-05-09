@@ -93,4 +93,17 @@ TEST_CASE("A Metadata struct is created", "[Metadata]") {
     REQUIRE(Metadata({Metadata::Cell, Metadata::Derived}) !=
             Metadata({Metadata::Cell, Metadata::Derived, Metadata::OneCopy}));
   }
+
+  GIVEN("A Metdata object with Sparse and Advected flags set") {
+    Metadata m({Metadata::Sparse, Metadata::Advected});
+    WHEN("Any/All/No checks return the right value") {
+      REQUIRE(m.AllFlagsSet({Metadata::Advected, Metadata::Sparse}) == true);
+      REQUIRE(m.AllFlagsSet({Metadata::Sparse}) == true);
+      REQUIRE(m.AllFlagsSet({Metadata::Advected, Metadata::Independent}) == false);
+      REQUIRE(m.NoFlagsSet({Metadata::Sparse, Metadata::Independent}) == false);
+      REQUIRE(m.NoFlagsSet({Metadata::FillGhost}) == true);
+      REQUIRE(m.AnyFlagsSet({Metadata::Advected, Metadata::Independent}) == true);
+      REQUIRE(m.AnyFlagsSet({Metadata::Derived}) == false);
+    }
+  }
 }

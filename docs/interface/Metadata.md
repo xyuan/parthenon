@@ -27,6 +27,8 @@ mutually exclusive:
   cell-corners. The variable might be volume-averaged, or defined
   pointwise.
 
+The `Where()` member function returns one of the above, as appropriate.
+
 ### Variable Behaviors
 
 These flags can be used to tell an application code how to treat a
@@ -104,3 +106,13 @@ MetadataFlag const my_app_flag = Metadata::AllocateNewFlag("MyAppFlag");
 These can be used in all the same contexts that the built-in metadata
 flags are used. Parthenon will not interpret them in any way - it's up
 to the application to interpret them.
+
+### Querying Metadata Flags
+
+The Metadata class provides several mechanisms to check whether its flags satisfy specified criteria.
+
+- `IsSet(MetadataFlag bit)` returns true the particular flag `bit` is set, and false otherwise.
+- `AnyFlagSet(std::vector<MetadataFlag> const &flags)` returns true if any of the flags in the vector argument are set, and false otherwise.
+- `AllFlagsSet(std::vector<MetadataFlag> const &flags)` returns true if all flags in the vector argument are set, and false otherwise.
+- `NoFlagsSet(std::vector<MetadataFlag> const &flags)` returns true if all flags in the vector argument are unset, and false otherwise.
+- Finally, `==` and `!=` are overloaded to allow equality checks between Metadata objects.
