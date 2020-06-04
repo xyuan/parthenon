@@ -225,6 +225,14 @@ class MeshBlock {
     parthenon::par_for(name, exec_space, nl, nu, kl, ku, jl, ju, il, iu, function);
   }
 
+  // 1D Outer default loop pattern
+  template <typename Function>
+  inline void par_for_outer(const std::string &name, const size_t &scratch_size_in_bytes,
+                            const int &scratch_level, const int &kl, const int &ku,
+                            const Function &function) {
+    parthenon::par_for_outer(name, exec_space, scratch_size_in_bytes, scratch_level, kl,
+                             ku, function);
+  }
   // 2D Outer default loop pattern
   template <typename Function>
   inline void par_for_outer(const std::string &name, const size_t &scratch_size_in_bytes,
@@ -316,9 +324,14 @@ class Mesh {
   // accessors
   int GetNumMeshBlocksThisRank(int my_rank) { return nblist[my_rank]; }
   int GetNumMeshThreads() const { return num_mesh_threads_; }
+  int GetNumMeshStreams() const { return num_mesh_streams_; }
   std::int64_t GetTotalCells() {
     return static_cast<std::int64_t>(nbtotal) * pblock->block_size.nx1 *
            pblock->block_size.nx2 * pblock->block_size.nx3;
+  }
+
+  DevExecSpace GetExecSpaceFromPool(int nmb) {
+    return exec_spaces[nmb % num_mesh_streams_];
   }
 
   // data
@@ -378,6 +391,8 @@ class Mesh {
   int next_phys_id_; // next unused value for encoding final component of MPI tag bitfield
   int root_level, max_level, current_level;
   int num_mesh_threads_;
+  int num_mesh_streams_;
+  std::vector<DevExecSpace> exec_spaces;
   int *nslist, *ranklist, *nblist;
   double *costlist;
   // 8x arrays used exclusively for AMR (not SMR):

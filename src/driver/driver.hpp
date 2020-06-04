@@ -22,6 +22,7 @@
 
 #include "basic_types.hpp"
 #include "globals.hpp"
+#include "kokkos_abstraction.hpp"
 #include "mesh/mesh.hpp"
 #include "outputs/outputs.hpp"
 #include "task_list/tasks.hpp"
@@ -82,6 +83,7 @@ TaskListStatus ConstructAndExecuteBlockTasks(T *driver, Args... args) {
 #ifdef OPENMP_PARALLEL
   int nthreads = driver->pmesh->GetNumMeshThreads();
 #endif
+
   int nmb = driver->pmesh->GetNumMeshBlocksThisRank(Globals::my_rank);
   std::vector<TaskList> task_lists;
   MeshBlock *pmb = driver->pmesh->pblock;
@@ -101,6 +103,7 @@ TaskListStatus ConstructAndExecuteBlockTasks(T *driver, Args... args) {
       }
     }
   }
+
   return TaskListStatus::complete;
 }
 
