@@ -1,3 +1,4 @@
+
 //========================================================================================
 // (C) (or copyright) 2020. Triad National Security, LLC. All rights reserved.
 //
@@ -49,25 +50,30 @@
 
 #include <stdio.h>
 
+#include "Kokkos_Core.hpp"
+#include "cudaProfiler.h"
 #include <iostream>
 #include <string>
 #include <vector>
 
-#include "Kokkos_Core.hpp"
-
 // Get most commonly used parthenon package includes
 #include "parthenon/package.hpp"
 using namespace parthenon::package::prelude;
+// using parthenon::LoopPatternMDRange;
+// using parthenon::LoopPatternFlatRange;
+// using parthenon::LoopPatternSimdFor;
 
 using View2D = Kokkos::View<Real **, Kokkos::LayoutRight, Kokkos::DefaultExecutionSpace>;
 
 // The result struct contains results of different tests
 typedef struct result_t {
-  std::string name; // The name of this test
-  Real pi;          // the value of pi calculated
-  Real t;           // time taken to run test
-  int iops;         // number of integer ops
-  int fops;         // number of floating point ops
+  std::string name;  // The name of this test
+  Real pi;           // the value of pi calculated
+  Real t;            // time taken to run test
+  int iops;          // number of integer ops
+  int fops;          // number of floating point ops
+  size_t bytesRead;  // number of bytes transferred
+  size_t bytesWrite; // number of bytes transferred
 } result_t;
 
 // simple giga-ops calculator
@@ -83,7 +89,9 @@ static double kernel_timer_wrapper(const int n_burn, const int n_perf,
                                    PerfFunc perf_func) {
   // Initialize the timer and test
   Kokkos::Timer timer;
-
+  Kokkos::fence();
+  timer.reset();
+  //  cuProfilerStart();
   for (int i_run = 0; i_run < n_burn + n_perf; i_run++) {
     if (i_run == n_burn) {
       // Burn in time is over, start timing
@@ -98,6 +106,7 @@ static double kernel_timer_wrapper(const int n_burn, const int n_perf,
   // Time it
   Kokkos::fence();
   double perf_time = timer.seconds();
+  //  cuProfilerStop();
 
   return perf_time;
 }
@@ -127,9 +136,9 @@ static double sumArray(MeshBlock *firstBlock, const int &n_block) {
   while (pmb) {
     Container<Real> &base = pmb->real_containers.Get();
     auto inOrOut = base.PackVariables({Metadata::Independent});
-    double oneSum;
+    double oneSum = 0.0;
     Kokkos::parallel_reduce(
-        "Reduce Sum", policyBlock,
+        "sumArrayReduce", policyBlock,
         KOKKOS_LAMBDA(const int &idx, double &mySum) {
           const int k_grid = idx / n_block2;
           const int j_grid = (idx - k_grid * n_block2) / n_block;
@@ -206,8 +215,34 @@ void deleteMesh(MeshBlock *firstBlock) {
   }
 }
 
+#define NLOOP 1
+
+template <typename T>
+KOKKOS_INLINE_FUNCTION void doit(const int &idx, const int &iMesh, const int &n_block,
+                                 const int &n_block2, const Real &radius2,
+                                 const Real &dxyzCell, const View2D &xyz, T &inOrOut) {
+  const int k_grid = idx / n_block2;                                   // iops = 1
+  const int j_grid = (idx - k_grid * n_block2) / n_block;              // iops = 3
+  const int i_grid = idx - k_grid * n_block2 - j_grid * n_block;       // iops = 4
+  const Real x = xyz(0, iMesh) + dxyzCell * static_cast<Real>(i_grid); // fops = 2
+  const Real y = xyz(1, iMesh) + dxyzCell * static_cast<Real>(j_grid); // fops = 2
+  const Real z = xyz(2, iMesh) + dxyzCell * static_cast<Real>(k_grid); // fops = 2
+#if (NLOOP > 1)
+  for (int i = 0; i < NLOOP; i++) {
+    const Real myR2 = x * x + y * y + z * z + static_cast<Real>(i); // fops = NLOOP*6
+    inOrOut(0, k_grid + NGHOST, j_grid + NGHOST, i_grid + NGHOST) =
+        (myR2 < radius2 + static_cast<Real>(i) ? 1.0
+                                               : 0.0); // fops = NLOOP*1 iops = NLOOP*3
+  }
+#else
+  const Real myR2 = x * x + y * y + z * z; // fops = 5
+  inOrOut(0, k_grid + NGHOST, j_grid + NGHOST, i_grid + NGHOST) =
+      (myR2 < radius2 ? 1.0 : 0.0); // fops = 0 iops = 3
+#endif
+}
+
 result_t naiveKokkos(int n_block, int n_mesh, int n_iter, double radius) {
-  // creates a mesh and rusn a basic Kokkos implementation for looping through blocks.
+  // creates a mesh and runs a basic Kokkos implementation for looping through blocks.
 
   // Setup auxilliary variables
   const int n_block2 = n_block * n_block;
@@ -236,29 +271,106 @@ result_t naiveKokkos(int n_block, int n_mesh, int n_iter, double radius) {
       // iops = 8  fops = 11
       Kokkos::parallel_for(
           "Compute In Or Out", policyBlock, KOKKOS_LAMBDA(const int &idx) {
-            const int k_grid = idx / n_block2;                             // iops = 1
-            const int j_grid = (idx - k_grid * n_block2) / n_block;        // iops = 3
-            const int i_grid = idx - k_grid * n_block2 - j_grid * n_block; // iops = 4
-            const Real x =
-                xyz(0, iMesh) + dxyzCell * static_cast<Real>(i_grid); // fops = 2
-            const Real y =
-                xyz(1, iMesh) + dxyzCell * static_cast<Real>(j_grid); // fops = 2
-            const Real z =
-                xyz(2, iMesh) + dxyzCell * static_cast<Real>(k_grid); // fops = 2
-            const Real myR2 = x * x + y * y + z * z;                  // fops = 5
-            inOrOut(0, k_grid + NGHOST, j_grid + NGHOST, i_grid + NGHOST) =
-                (myR2 < radius2 ? 1.0 : 0.0); // iops = 3
+            doit(idx, iMesh, n_block, n_block2, radius2, dxyzCell, xyz, inOrOut);
           });
     }
   });
   Kokkos::fence();
 
   // formulate result struct
-  constexpr int niops = 8;
+  constexpr int niops = 11;
+#if NLOOP > 1
+  constexpr int nfops = 6 + NLOOP * 7;
+#else
   constexpr int nfops = 11;
-  auto r =
-      result_t{"Naive_Kokkos", (6.0 * sumArray(firstBlock, n_block) * dVol / radius3),
-               time_basic, niops, nfops};
+#endif
+  auto r = result_t{"Naive_Kokkos",
+                    (6.0 * sumArray(firstBlock, n_block) * dVol / radius3),
+                    time_basic,
+                    niops,
+                    nfops,
+                    0,
+                    1};
+
+  // Clean up the mesh
+  deleteMesh(firstBlock);
+
+  return r;
+}
+
+result_t cudaStream(int n_block, int n_mesh, int n_iter, double radius) {
+  // creates a mesh and runs a 3D Kokkos implementation for looping through blocks.
+  // Setup auxilliary variables
+  const int n_block2 = n_block * n_block;
+  const int n_block3 = n_block * n_block * n_block;
+  const int n_mesh3 = n_mesh * n_mesh * n_mesh;
+  const double radius2 = radius * radius;
+  const double radius3 = radius * radius * radius;
+  const Real dxyzCell = radius / static_cast<Real>(n_mesh * n_block);
+  const Real dVol = radius3 / static_cast<Real>(n_mesh3) / static_cast<Real>(n_block3);
+  constexpr int NSTREAMS = 8;
+
+  cudaStream_t s[NSTREAMS];
+  Kokkos::Cuda c[NSTREAMS];
+  for (int i = 0; i < NSTREAMS; i++) {
+    cudaStreamCreate(&(s[i]));
+    c[i] = Kokkos::Cuda(s[i]);
+  }
+  // allocate space for origin coordinates and set up the mesh
+  View2D xyz("xyzBlocks", 3, n_mesh3);
+  MeshBlock *firstBlock = setupMesh(n_block, n_mesh, radius, xyz);
+
+  // first A  naive Kokkos loop over the mesh
+  // This policy is over one block
+  auto policyBlock = Kokkos::RangePolicy<>(Kokkos::DefaultExecutionSpace(), 0, n_block3,
+                                           Kokkos::ChunkSize(512));
+  //  auto p0 = Kokkos::RangePolicy<Kokkos::Cuda>(cuda0, n_block3);
+
+  MeshBlock *pStart = firstBlock;
+  double time_basic = kernel_timer_wrapper(0, n_iter, [&]() {
+    MeshBlock *pmb = pStart;
+    int iMeshLimit = n_mesh3 - n_mesh3 % NSTREAMS;
+    for (int iMesh = 0; iMesh < iMeshLimit;) {
+      for (int iStream = 0; iStream < NSTREAMS; iStream++, iMesh++, pmb = pmb->next) {
+        Container<Real> &base = pmb->real_containers.Get();
+        auto inOrOut = base.PackVariables({Metadata::Independent});
+        // iops = 11  fops = 11
+        Kokkos::parallel_for(
+            "Compute In Or Out",
+            Kokkos::RangePolicy<Kokkos::Cuda>(c[iStream], 0, n_block3),
+            KOKKOS_LAMBDA(const int &idx) {
+              doit(idx, iMesh, n_block, n_block2, radius2, dxyzCell, xyz, inOrOut);
+            });
+      }
+    }
+    for (int iStream = 0, iMesh = iMeshLimit; iMesh < n_mesh3;
+         iStream++, iMesh++, pmb = pmb->next) {
+      Container<Real> &base = pmb->real_containers.Get();
+      auto inOrOut = base.PackVariables({Metadata::Independent});
+      // iops = 8  fops = 11
+      Kokkos::parallel_for(
+          "Compute In Or Out", Kokkos::RangePolicy<Kokkos::Cuda>(c[iStream], 0, n_block3),
+          KOKKOS_LAMBDA(const int &idx) {
+            doit(idx, iMesh, n_block, n_block2, radius2, dxyzCell, xyz, inOrOut);
+          });
+    }
+  });
+  Kokkos::fence();
+
+  // formulate result struct
+  constexpr int niops = 11;
+#if NLOOP > 1
+  constexpr int nfops = 6 + NLOOP * 7;
+#else
+  constexpr int nfops = 11;
+#endif
+  auto r = result_t{"CUDA_Streams",
+                    (6.0 * sumArray(firstBlock, n_block) * dVol / radius3),
+                    time_basic,
+                    niops,
+                    nfops,
+                    0,
+                    1};
 
   // Clean up the mesh
   deleteMesh(firstBlock);
@@ -267,7 +379,7 @@ result_t naiveKokkos(int n_block, int n_mesh, int n_iter, double radius) {
 }
 
 result_t naiveParFor(int n_block, int n_mesh, int n_iter, double radius) {
-  // creates a mesh and rusn a basic par_for implementation for looping through blocks.
+  // creates a mesh and runs a basic par_for implementation for looping through blocks.
 
   // Setup auxilliary variables
   const int n_block3 = n_block * n_block * n_block;
@@ -300,19 +412,39 @@ result_t naiveParFor(int n_block, int n_mesh, int n_iter, double radius) {
                 xyz(1, iMesh) + dxyzCell * static_cast<Real>(j_grid); // fops = 2
             const Real z =
                 xyz(2, iMesh) + dxyzCell * static_cast<Real>(k_grid); // fops = 2
-            const Real myR2 = x * x + y * y + z * z;                  // fops = 5
-            inOrOut(l, k_grid, j_grid, i_grid) = (myR2 < radius2 ? 1.0 : 0.0);
+
+#if NLOOP > 1
+            for (int i = 0; i < NLOOP; i++) {
+              const Real myR2 =
+                  x * x + y * y + z * z + static_cast<Real>(i); // fops = NLOOP*6
+              inOrOut(0, k_grid, j_grid, i_grid) =
+                  (myR2 < radius2 + static_cast<Real>(i)
+                       ? 1.0
+                       : 0.0); // fops = NLOOP*1 iops = NLOOP*3
+            }
+#else
+	    const Real myR2 = x * x + y * y + z * z;                  // fops = 5
+	    inOrOut(l, k_grid, j_grid, i_grid) = (myR2 < radius2 ? 1.0 : 0.0);
+#endif
           });
     }
   });
   Kokkos::fence();
 
   // formulate result struct
-  constexpr int niops = 0;
+  constexpr int niops = 11;
+#if NLOOP > 1
+  constexpr int nfops = 6 + NLOOP * 7;
+#else
   constexpr int nfops = 11;
-  auto r =
-      result_t{"Naive_ParFor", (6.0 * sumArray(firstBlock, n_block) * dVol / radius3),
-               time_basic, niops, nfops};
+#endif
+  auto r = result_t{"Naive_ParFor",
+                    (6.0 * sumArray(firstBlock, n_block) * dVol / radius3),
+                    time_basic,
+                    niops,
+                    nfops,
+                    0,
+                    1};
 
   // Clean up the mesh
   deleteMesh(firstBlock);
@@ -321,6 +453,7 @@ result_t naiveParFor(int n_block, int n_mesh, int n_iter, double radius) {
 }
 
 int main(int argc, char *argv[]) {
+  //  cuProfilerStop();
   Kokkos::initialize(argc, argv);
   do {
     // ensure we have correct number of arguments
@@ -347,7 +480,11 @@ int main(int argc, char *argv[]) {
     // A result vector
     std::vector<struct result_t> results;
 
+    // discard first loop timing
+    (void)naiveParFor(n_block, n_mesh, n_iter, radius);
+
     // Run Naive Kokkos Implementation
+    results.push_back(cudaStream(n_block, n_mesh, n_iter, radius));
     results.push_back(naiveKokkos(n_block, n_mesh, n_iter, radius));
     results.push_back(naiveParFor(n_block, n_mesh, n_iter, radius));
 
@@ -355,14 +492,20 @@ int main(int argc, char *argv[]) {
     const int64_t n_block3 = n_block * n_block * n_block;
     const int64_t n_mesh3 = n_mesh * n_mesh * n_mesh;
 
-    printf("\nname,t(s),cps,GFlops,pi\n");
-    int64_t iterBlockMesh = static_cast<int64_t>(n_iter) * static_cast<int64_t>(n_mesh3) *
-                            static_cast<int64_t>(n_block3);
+    const int64_t iterBlockMesh = static_cast<int64_t>(n_iter) *
+                                  static_cast<int64_t>(n_mesh3) *
+                                  static_cast<int64_t>(n_block3);
+    /* Markdown print */
+    printf("\n|name|t(s)|cps|GFlops|Write GB/s|π|\n");
+    printf("|:---|:---|:---|:---|:---|:---|\n");
     for (auto &test : results) {
-      double cps = static_cast<Real>(iterBlockMesh) / test.t;
-      printf("%s,%.8lf,%10g,%.4lf,%.14lf\n", test.name.c_str(), test.t, cps,
-             calcGops(test.fops, test.t, n_block3, n_mesh3, n_iter), test.pi);
+      Real cps = static_cast<Real>(iterBlockMesh) / test.t;
+      Real compRate = calcGops(test.fops, test.t, n_block3, n_mesh3, n_iter);
+      Real writeRate = calcGops(8 * test.bytesWrite, test.t, n_block3, n_mesh3, n_iter);
+      printf("|%s|%.8lf|%10g|%.4lf|%.4lf|%.14lf|\n", test.name.c_str(), test.t, cps,
+             compRate, writeRate, test.pi);
     }
+
   } while (0);
   Kokkos::finalize();
 }
