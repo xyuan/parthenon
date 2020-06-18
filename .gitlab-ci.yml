@@ -24,9 +24,22 @@ variables:
   GIT_SUBMODULE_STRATEGY: recursive
 
 stages:
+  - info
   - unit
   - performance_and_regression
   - style
+
+print-info:
+  stage: info
+  tags:
+    - ib
+    - springdale7
+  script:
+    - free -m
+    - hostname
+    - module avail
+    - cat /proc/cpuinfo
+    - lspci
 
 style-check:
   tags:
