@@ -1,5 +1,3 @@
-image: cuda10.0-mpi-hdf5-mpl
-
 # Is performed before the scripts in the stages step
 before_script:
     - export OMP_PROC_BIND=close
@@ -14,7 +12,7 @@ before_script:
     - if [ `cat tst/regression/gold_standard/current_version` != ${GOLD_STANDARD_VER} ]; then
       echo "Updating regression Gold standard to ${GOLD_STANDARD_VER}." &&
       wget -qO- https://pgrete.de/dl/parthenon_regression_gold_r${GOLD_STANDARD_VER}.tgz | tar -xz -C tst/regression/gold_standard; fi
-    - update-alternatives --install /usr/bin/python python /usr/bin/python3 10
+#    - update-alternatives --install /usr/bin/python python /usr/bin/python3 10
 
 cache:
   paths:
