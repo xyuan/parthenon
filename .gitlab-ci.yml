@@ -12,11 +12,18 @@ before_script:
     - if [ `cat tst/regression/gold_standard/current_version` != ${GOLD_STANDARD_VER} ]; then
       echo "Updating regression Gold standard to ${GOLD_STANDARD_VER}." &&
       wget -qO- https://pgrete.de/dl/parthenon_regression_gold_r${GOLD_STANDARD_VER}.tgz | tar -xz -C tst/regression/gold_standard; fi
-#    - update-alternatives --install /usr/bin/python python /usr/bin/python3 10
+    - module load intel-mpi/intel/2019.2/64 intel/19.0/64/19.0.2.187 python3
+    - wget https://s3.amazonaws.com/hdf-wordpress-1/wp-content/uploads/manual/HDF5/HDF5_1_10_4/hdf5-1.10.4.tar.bz2
+    - tar xjf hdf5-1.10.4.tar.bz2
+    - mkdir -p ./local/hdf5/serial ./local/hdf5/parallel
+    - cd hdf5-1.10.4
+    - CC=icc ./configure --prefix=${PWD}/../local/hdf5/serial && make -j8 && make install && make clean
+    - CC=mpiicc ./configure --prefix=${PWD}/../local/hdf5/parallel --enable-parallel && make -j8 && make install && make clean
 
 cache:
   paths:
     - tst/regression/gold_standard/
+    - local/
 
 variables:
   GIT_SUBMODULE_STRATEGY: recursive
@@ -46,14 +53,12 @@ style-check:
     - springdale7
   stage: style
   script:
-    - module load python3
     - which python
     - python ./tst/style/cpplint.py --counting=detailed --recursive src example tst
 
 parthenon-cuda-unit:
   tags:
     - cuda
-  stage: disabled
   script:
 # mitigate UVM allocations on older multi-GPU systems
 #    - export CUDA_LAUNCH_BLOCKING=1
@@ -80,11 +85,12 @@ parthenon-cpu-unit:
     - springdale7
   stage: unit
   script:
-    - module load hdf5/intel-18.0.2/impi-18.0.2/1.10.1 python3
     - mkdir build-debug
     - cd build-debug
     - cmake -DCMAKE_BUILD_TYPE=Debug
+      -DHDF5_ROOT=${PWD}/../local/hdf5/parallel
       -DKokkos_ENABLE_OPENMP=True -DKokkos_ARCH_BDW=True
+      -DCMAKE_CXX_COMPILER=mpiicpc
       ../ && make -j${J} && ctest -j${J} -LE "performance|regression"
   artifacts:
     when: always
@@ -95,7 +101,6 @@ parthenon-cpu-unit:
 parthenon-cuda-performance_and_regression:
   tags:
     - cuda
-  stage: disabled
   script:
     - mkdir build-cuda-perf
     - cd build-cuda-perf
@@ -132,7 +137,6 @@ parthenon-cuda-performance_and_regression:
 parthenon-cuda-performance_and_regression-mpi:
   tags:
     - cuda
-  stage: disabled
   script:
 # run regression tests with UVM until everything is on the device
 # mitigate UVM allocations on older multi-GPU systems
@@ -163,12 +167,13 @@ parthenon-cpu-performance_and_regression:
     - springdale7
   stage: performance_and_regression
   script:
-    - module load hdf5/intel-18.0.2/impi-18.0.2/1.10.1 python3
     - mkdir build-perf
     - cd build-perf
     - cmake -DCMAKE_BUILD_TYPE=Release
       -DKokkos_ENABLE_OPENMP=True -DKokkos_ARCH_BDW=True
       -DPARTHENON_DISABLE_MPI=ON
+      -DHDF5_ROOT=${PWD}/../local/hdf5/serial
+      -DCMAKE_CXX_COMPILER=icpc
       ../ && make -j${J} && ctest -L "performance|regression" -LE mpi-yes
   artifacts:
     when: always
@@ -184,11 +189,12 @@ parthenon-cpu-performance_and_regression-mpi:
     - springdale7
   stage: performance_and_regression
   script:
-    - module load hdf5/intel-18.0.2/impi-18.0.2/1.10.1 python3
     - mkdir build-perf-mpi
     - cd build-perf-mpi
     - cmake -DCMAKE_BUILD_TYPE=Release
+      -DHDF5_ROOT=${PWD}/../local/hdf5/parallel
       -DKokkos_ENABLE_OPENMP=True -DKokkos_ARCH_BDW=True
+      -DCMAKE_CXX_COMPILER=mpiicpc
       ../ && make -j${J}
 #    - ctest -L "performance" # no need for performance test as currently none use MPI
     - ctest -L regression -LE mpi-no
