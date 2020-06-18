@@ -35,21 +35,24 @@ print-info:
   script:
     - free -m
     - hostname
+    - module list
     - module avail
     - cat /proc/cpuinfo
     - lspci
 
 style-check:
   tags:
-    - cpu
+    - springdale7
   stage: style
   script:
+    - module load python3
+    - which python
     - python ./tst/style/cpplint.py --counting=detailed --recursive src example tst
 
 parthenon-cuda-unit:
   tags:
     - cuda
-  stage: unit
+  stage: unit-dis
   script:
 # mitigate UVM allocations on older multi-GPU systems
 #    - export CUDA_LAUNCH_BLOCKING=1
@@ -57,7 +60,7 @@ parthenon-cuda-unit:
     - mkdir build-cuda-debug
     - cd build-cuda-debug
     - cmake -DCMAKE_BUILD_TYPE=Debug -DHDF5_ROOT=/usr/local/hdf5/parallel
-      -DKokkos_ENABLE_OPENMP=True -DKokkos_ARCH_WSM=True
+      -DKokkos_ENABLE_OPENMP=True -DKokkos_ARCH_BDW=True
       -DKokkos_ENABLE_CUDA=True -DKokkos_ARCH_PASCAL61=True
       -DMPIEXEC_PREFLAGS="--allow-run-as-root"
       -DCMAKE_CXX_COMPILER=${PWD}/../external/Kokkos/bin/nvcc_wrapper
@@ -73,14 +76,14 @@ parthenon-cuda-unit:
 # run unit suite on CPUs
 parthenon-cpu-unit:
   tags:
-    - cpu
+    - springdale7
   stage: unit
   script:
+    - module load hdf5/intel-18.0.2/impi-18.0.2/1.10.1 python3
     - mkdir build-debug
     - cd build-debug
-    - cmake -DCMAKE_BUILD_TYPE=Debug -DHDF5_ROOT=/usr/local/hdf5/parallel
-      -DKokkos_ENABLE_OPENMP=True -DKokkos_ARCH_WSM=True
-      -DMPIEXEC_PREFLAGS="--allow-run-as-root"
+    - cmake -DCMAKE_BUILD_TYPE=Debug
+      -DKokkos_ENABLE_OPENMP=True -DKokkos_ARCH_BDW=True
       ../ && make -j${J} && ctest -j${J} -LE "performance|regression"
   artifacts:
     when: always
@@ -91,12 +94,12 @@ parthenon-cpu-unit:
 parthenon-cuda-performance_and_regression:
   tags:
     - cuda
-  stage: performance_and_regression
+  stage: performance_and_regression-dis
   script:
     - mkdir build-cuda-perf
     - cd build-cuda-perf
     - cmake -DCMAKE_BUILD_TYPE=Release -DHDF5_ROOT=/usr/local/hdf5/parallel
-      -DKokkos_ENABLE_OPENMP=True -DKokkos_ARCH_WSM=True
+      -DKokkos_ENABLE_OPENMP=True -DKokkos_ARCH_BDW=True
       -DKokkos_ENABLE_CUDA=True -DKokkos_ARCH_PASCAL61=True
       -DMPIEXEC_PREFLAGS="--allow-run-as-root"
       -DCMAKE_CXX_COMPILER=${PWD}/../external/Kokkos/bin/nvcc_wrapper
@@ -109,7 +112,7 @@ parthenon-cuda-performance_and_regression:
     - mkdir build-cuda-perf-uvm
     - cd build-cuda-perf-uvm
     - cmake -DCMAKE_BUILD_TYPE=Release -DHDF5_ROOT=/usr/local/hdf5/serial
-      -DKokkos_ENABLE_OPENMP=True -DKokkos_ARCH_WSM=True
+      -DKokkos_ENABLE_OPENMP=True -DKokkos_ARCH_BDW=True
       -DKokkos_ENABLE_CUDA=True -DKokkos_ARCH_PASCAL61=True
       -DPARTHENON_DISABLE_MPI=ON
       -DCMAKE_CXX_COMPILER=${PWD}/../external/Kokkos/bin/nvcc_wrapper
@@ -128,7 +131,7 @@ parthenon-cuda-performance_and_regression:
 parthenon-cuda-performance_and_regression-mpi:
   tags:
     - cuda
-  stage: performance_and_regression
+  stage: performance_and_regression-dis
   script:
 # run regression tests with UVM until everything is on the device
 # mitigate UVM allocations on older multi-GPU systems
@@ -137,7 +140,7 @@ parthenon-cuda-performance_and_regression-mpi:
     - mkdir build-cuda-perf-mpi-uvm
     - cd build-cuda-perf-mpi-uvm
     - cmake -DCMAKE_BUILD_TYPE=Release -DHDF5_ROOT=/usr/local/hdf5/parallel
-      -DKokkos_ENABLE_OPENMP=True -DKokkos_ARCH_WSM=True
+      -DKokkos_ENABLE_OPENMP=True -DKokkos_ARCH_BDW=True
       -DKokkos_ENABLE_CUDA=True -DKokkos_ARCH_PASCAL61=True
       -DMPIEXEC_PREFLAGS="--allow-run-as-root"
       -DCMAKE_CXX_COMPILER=${PWD}/../external/Kokkos/bin/nvcc_wrapper
@@ -156,13 +159,14 @@ parthenon-cuda-performance_and_regression-mpi:
 # run performance and regression on CPUs without MPI
 parthenon-cpu-performance_and_regression:
   tags:
-    - cpu
+    - springdale7
   stage: performance_and_regression
   script:
+    - module load hdf5/intel-18.0.2/impi-18.0.2/1.10.1 python3
     - mkdir build-perf
     - cd build-perf
-    - cmake -DCMAKE_BUILD_TYPE=Release -DHDF5_ROOT=/usr/local/hdf5/serial
-      -DKokkos_ENABLE_OPENMP=True -DKokkos_ARCH_WSM=True
+    - cmake -DCMAKE_BUILD_TYPE=Release
+      -DKokkos_ENABLE_OPENMP=True -DKokkos_ARCH_BDW=True
       -DPARTHENON_DISABLE_MPI=ON
       ../ && make -j${J} && ctest -L "performance|regression" -LE mpi-yes
   artifacts:
@@ -176,14 +180,14 @@ parthenon-cpu-performance_and_regression:
 # run performance and regression on CPUs with MPI
 parthenon-cpu-performance_and_regression-mpi:
   tags:
-    - cpu
+    - springdale7
   stage: performance_and_regression
   script:
+    - module load hdf5/intel-18.0.2/impi-18.0.2/1.10.1 python3
     - mkdir build-perf-mpi
     - cd build-perf-mpi
-    - cmake -DCMAKE_BUILD_TYPE=Release -DHDF5_ROOT=/usr/local/hdf5/parallel
-      -DKokkos_ENABLE_OPENMP=True -DKokkos_ARCH_WSM=True
-      -DMPIEXEC_PREFLAGS="--allow-run-as-root"
+    - cmake -DCMAKE_BUILD_TYPE=Release
+      -DKokkos_ENABLE_OPENMP=True -DKokkos_ARCH_BDW=True
       ../ && make -j${J}
 #    - ctest -L "performance" # no need for performance test as currently none use MPI
     - ctest -L regression -LE mpi-no
