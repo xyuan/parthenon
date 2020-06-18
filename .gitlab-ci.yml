@@ -26,6 +26,7 @@ stages:
   - unit
   - performance_and_regression
   - style
+  - disabled
 
 print-info:
   stage: info
@@ -52,7 +53,7 @@ style-check:
 parthenon-cuda-unit:
   tags:
     - cuda
-  stage: unit-dis
+  stage: disabled
   script:
 # mitigate UVM allocations on older multi-GPU systems
 #    - export CUDA_LAUNCH_BLOCKING=1
@@ -94,7 +95,7 @@ parthenon-cpu-unit:
 parthenon-cuda-performance_and_regression:
   tags:
     - cuda
-  stage: performance_and_regression-dis
+  stage: disabled
   script:
     - mkdir build-cuda-perf
     - cd build-cuda-perf
@@ -131,7 +132,7 @@ parthenon-cuda-performance_and_regression:
 parthenon-cuda-performance_and_regression-mpi:
   tags:
     - cuda
-  stage: performance_and_regression-dis
+  stage: disabled
   script:
 # run regression tests with UVM until everything is on the device
 # mitigate UVM allocations on older multi-GPU systems
