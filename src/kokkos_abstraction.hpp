@@ -441,7 +441,7 @@ inline void par_for(LoopPatternTPTVR, const std::string &name, DevExecSpace exec
         int j = team_member.league_rank() - n * NkNj - k * Nj + jl;
         n += nl;
         k += kl;
-        Kokkos::parallel_for(Kokkos::ThreadVectorRange<>(team_member, il, iu + 1),
+        Kokkos::parallel_for(Kokkos::TeamVectorRange<>(team_member, il, iu + 1),
                              [&](const int i) { function(n, k, j, i); });
       });
 }
