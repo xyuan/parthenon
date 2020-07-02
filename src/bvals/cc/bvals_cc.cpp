@@ -224,25 +224,42 @@ void CellCenteredBoundaryVariable::SendBoundaryBuffers() {
         const int Nj = ej + 1 - sj;
         const int Nk = ek + 1 - sk;
         const int Nn = en + 1 - sn;
-        const int NnNkNjNi = Nn * Nk * Nj * Ni;
-        const int NkNjNi = Nk * Nj * Ni;
-        const int NjNi = Nj * Ni;
+        const int NnNkNj = Nn * Nk * Nj;
+        const int NkNj = Nk * Nj;
 
         Kokkos::parallel_for(
-            Kokkos::TeamVectorRange(team_member, NnNkNjNi), [&](const int idx) {
-              int n = idx / NkNjNi;
-              int k = (idx - n * NkNjNi) / NjNi;
-              int j = (idx - n * NkNjNi - k * NjNi) / Ni;
-              int i = idx - n * NkNjNi - k * NjNi - j * Ni;
+            Kokkos::TeamThreadRange<>(team_member, NnNkNj), [&](const int idx) {
+              int n = idx / NkNj;
+              int k = (idx - n * NkNj) / Nj;
+              int j = idx - n * NkNj - k * Nj;
               n += sn;
               k += sk;
               j += sj;
-              i += si;
-              // original offset is ignored here
-              bnd_info_all[mb].buf(i - si +
-                                   Ni * (j - sj + Nj * (k - sk + Nk * (n - sn)))) =
-                  var_cc_(n, k, j, i);
+
+              Kokkos::parallel_for(
+                  Kokkos::ThreadVectorRange(team_member, si, ei + 1), [&](const int i) {
+                    // original offset is ignored here
+                    bnd_info_all[mb].buf(i - si +
+                                         Ni * (j - sj + Nj * (k - sk + Nk * (n - sn)))) =
+                        var_cc_(n, k, j, i);
+                  });
             });
+
+        // Kokkos::parallel_for(
+        //     Kokkos::TeamVectorRange(team_member, NnNkNjNi), [&](const int idx) {
+        //       int n = idx / NkNjNi;
+        //       int k = (idx - n * NkNjNi) / NjNi;
+        //       int j = (idx - n * NkNjNi - k * NjNi) / Ni;
+        //       int i = idx - n * NkNjNi - k * NjNi - j * Ni;
+        //       n += sn;
+        //       k += sk;
+        //       j += sj;
+        //       i += si;
+        //       // original offset is ignored here
+        //       bnd_info_all[mb].buf(i - si +
+        //                            Ni * (j - sj + Nj * (k - sk + Nk * (n - sn)))) =
+        //           var_cc_(n, k, j, i);
+        //     });
       });
 #ifdef __UNUSED
   Kokkos::parallel_for(
@@ -290,8 +307,6 @@ void CellCenteredBoundaryVariable::SendBoundaryBuffers() {
   // delete[] bnd_info_all;
   return;
 }
-
-
 
 //----------------------------------------------------------------------------------------
 //! \fn void BoundaryVariable::SetBoundaries()
@@ -352,24 +367,40 @@ void CellCenteredBoundaryVariable::SetBoundaries() {
         const int Nj = ej + 1 - sj;
         const int Nk = ek + 1 - sk;
         const int Nn = en + 1 - sn;
-        const int NnNkNjNi = Nn * Nk * Nj * Ni;
-        const int NkNjNi = Nk * Nj * Ni;
-        const int NjNi = Nj * Ni;
+        const int NnNkNj = Nn * Nk * Nj;
+        const int NkNj = Nk * Nj;
 
         Kokkos::parallel_for(
-            Kokkos::TeamVectorRange(team_member, NnNkNjNi), [&](const int idx) {
-              int n = idx / NkNjNi;
-              int k = (idx - n * NkNjNi) / NjNi;
-              int j = (idx - n * NkNjNi - k * NjNi) / Ni;
-              int i = idx - n * NkNjNi - k * NjNi - j * Ni;
+            Kokkos::TeamThreadRange<>(team_member, NnNkNj), [&](const int idx) {
+              int n = idx / NkNj;
+              int k = (idx - n * NkNj) / Nj;
+              int j = idx - n * NkNj - k * Nj;
               n += sn;
               k += sk;
               j += sj;
-              i += si;
-              // original offset is ignored here
-              var_cc_(n, k, j, i) = bnd_info_all[mb].buf(
-                  i - si + Ni * (j - sj + Nj * (k - sk + Nk * (n - sn))));
+
+              Kokkos::parallel_for(
+                  Kokkos::ThreadVectorRange(team_member, si, ei + 1), [&](const int i) {
+                    // original offset is ignored here
+                    var_cc_(n, k, j, i) = bnd_info_all[mb].buf(
+                        i - si + Ni * (j - sj + Nj * (k - sk + Nk * (n - sn))));
+                  });
             });
+
+        // Kokkos::parallel_for(
+        //     Kokkos::TeamVectorRange(team_member, NnNkNjNi), [&](const int idx) {
+        //       int n = idx / NkNjNi;
+        //       int k = (idx - n * NkNjNi) / NjNi;
+        //       int j = (idx - n * NkNjNi - k * NjNi) / Ni;
+        //       int i = idx - n * NkNjNi - k * NjNi - j * Ni;
+        //       n += sn;
+        //       k += sk;
+        //       j += sj;
+        //       i += si;
+        //       // original offset is ignored here
+        //       var_cc_(n, k, j, i) = bnd_info_all[mb].buf(
+        //           i - si + Ni * (j - sj + Nj * (k - sk + Nk * (n - sn))));
+        //     });
       });
 
   pmb->exec_space.fence();
