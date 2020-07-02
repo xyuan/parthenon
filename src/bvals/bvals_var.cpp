@@ -78,8 +78,10 @@ void BoundaryVariable::InitBoundaryData(BoundaryData<> &bd, BoundaryQuantity typ
           << "Invalid boundary type is specified." << std::endl;
       PARTHENON_FAIL(msg);
     }
-    bd.send[n] = ParArray1D<Real>("send buf " + std::to_string(n), size);
-    bd.recv[n] = ParArray1D<Real>("recv buf " + std::to_string(n), size);
+    bd.send[n] = Kokkos::View<Real *, LayoutWrapper, HostMemSpace>(
+        "send buf " + std::to_string(n), size);
+    bd.recv[n] = Kokkos::View<Real *, LayoutWrapper, HostMemSpace>(
+        "recv buf " + std::to_string(n), size);
   }
 }
 
@@ -116,9 +118,11 @@ void BoundaryVariable::CopyVariableBufferSameProcess(NeighborBlock &nb, int ssiz
   // overwriting it
   // using source block for deep copy to ensure physics kernels are done
   MeshBlock *psource_block = pmy_block_;
-  psource_block->deep_copy(ptarget_bdata->recv[nb.targetid], bd_var_.send[nb.bufid]);
+  // psource_block->deep_copy(ptarget_bdata->recv[nb.targetid], bd_var_.send[nb.bufid]);
   // need fence here as deep_copy is async
-  psource_block->exec_space.fence();
+  // psource_block->exec_space.fence();
+  std::memcpy(ptarget_bdata->recv[nb.targetid].data(), bd_var_.send[nb.bufid].data(),
+              ssize * sizeof(Real));
   // finally, set the BoundaryStatus flag on the destination buffer
   ptarget_bdata->flag[nb.targetid] = BoundaryStatus::arrived;
   return;
@@ -156,12 +160,12 @@ void BoundaryVariable::SendBoundaryBuffers() {
     NeighborBlock &nb = pmb->pbval->neighbor[n];
     if (bd_var_.sflag[nb.bufid] == BoundaryStatus::completed) continue;
     int ssize;
-    if (nb.snb.level == mylevel)
-      ssize = LoadBoundaryBufferSameLevel(bd_var_.send[nb.bufid], nb);
-    else if (nb.snb.level < mylevel)
-      ssize = LoadBoundaryBufferToCoarser(bd_var_.send[nb.bufid], nb);
-    else
-      ssize = LoadBoundaryBufferToFiner(bd_var_.send[nb.bufid], nb);
+    //if (nb.snb.level == mylevel)
+      //ssize = LoadBoundaryBufferSameLevel(bd_var_.send[nb.bufid], nb);
+    //else if (nb.snb.level < mylevel)
+      //ssize = LoadBoundaryBufferToCoarser(bd_var_.send[nb.bufid], nb);
+    //else
+      //ssize = LoadBoundaryBufferToFiner(bd_var_.send[nb.bufid], nb);
     if (nb.snb.rank == Globals::my_rank) {
       // on the same process
       CopyVariableBufferSameProcess(nb, ssize);
@@ -219,13 +223,13 @@ void BoundaryVariable::SetBoundaries() {
   int mylevel = pmb->loc.level;
   for (int n = 0; n < pmb->pbval->nneighbor; n++) {
     NeighborBlock &nb = pmb->pbval->neighbor[n];
-    if (nb.snb.level == mylevel)
-      // TODO(pgrete) FIX interface
-      SetBoundarySameLevel(bd_var_.recv[nb.bufid], nb);
-    else if (nb.snb.level < mylevel) // only sets the prolongation buffer
-      SetBoundaryFromCoarser(bd_var_.recv[nb.bufid], nb);
-    else
-      SetBoundaryFromFiner(bd_var_.recv[nb.bufid], nb);
+    // if (nb.snb.level == mylevel)
+    //   // TODO(pgrete) FIX interface
+    //   SetBoundarySameLevel(bd_var_.recv[nb.bufid], nb);
+    // else if (nb.snb.level < mylevel) // only sets the prolongation buffer
+    //   SetBoundaryFromCoarser(bd_var_.recv[nb.bufid], nb);
+    // else
+    //   SetBoundaryFromFiner(bd_var_.recv[nb.bufid], nb);
     bd_var_.flag[nb.bufid] = BoundaryStatus::completed; // completed
   }
 
@@ -247,12 +251,12 @@ void BoundaryVariable::ReceiveAndSetBoundariesWithWait() {
       MPI_Wait(&(bd_var_.req_recv[nb.bufid]), MPI_STATUS_IGNORE);
     }
 #endif
-    if (nb.snb.level == mylevel)
-      SetBoundarySameLevel(bd_var_.recv[nb.bufid], nb);
-    else if (nb.snb.level < mylevel)
-      SetBoundaryFromCoarser(bd_var_.recv[nb.bufid], nb);
-    else
-      SetBoundaryFromFiner(bd_var_.recv[nb.bufid], nb);
+    // if (nb.snb.level == mylevel)
+    //   SetBoundarySameLevel(bd_var_.recv[nb.bufid], nb);
+    // else if (nb.snb.level < mylevel)
+    //   SetBoundaryFromCoarser(bd_var_.recv[nb.bufid], nb);
+    // else
+    //   SetBoundaryFromFiner(bd_var_.recv[nb.bufid], nb);
     bd_var_.flag[nb.bufid] = BoundaryStatus::completed; // completed
   }
 

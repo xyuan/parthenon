@@ -53,6 +53,19 @@ using ParArray5D = Kokkos::View<T *****, LayoutWrapper, DevMemSpace>;
 template <typename T>
 using ParArray6D = Kokkos::View<T ******, LayoutWrapper, DevMemSpace>;
 
+template <typename T>
+using HostArray1D = Kokkos::View<T *, LayoutWrapper, HostMemSpace>;
+template <typename T>
+using HostArray2D = Kokkos::View<T **, LayoutWrapper, HostMemSpace>;
+template <typename T>
+using HostArray3D = Kokkos::View<T ***, LayoutWrapper, HostMemSpace>;
+template <typename T>
+using HostArray4D = Kokkos::View<T ****, LayoutWrapper, HostMemSpace>;
+template <typename T>
+using HostArray5D = Kokkos::View<T *****, LayoutWrapper, HostMemSpace>;
+template <typename T>
+using HostArray6D = Kokkos::View<T ******, LayoutWrapper, HostMemSpace>;
+
 template <bool>
 struct UseLightweightKernel {};
 

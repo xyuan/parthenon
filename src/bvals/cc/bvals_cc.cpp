@@ -28,6 +28,9 @@
 #include <stdexcept>
 #include <string>
 
+#include "Kokkos_CopyViews.hpp"
+#include "Kokkos_HostSpace.hpp"
+#include "kokkos_abstraction.hpp"
 #include "parthenon_mpi.hpp"
 
 #include "basic_types.hpp"
@@ -69,6 +72,7 @@ CellCenteredBoundaryVariable::CellCenteredBoundaryVariable(MeshBlock *pmb,
     cc_flx_phys_id_ = cc_phys_id_ + 1;
 #endif
   }
+  var_cc_h = Kokkos::create_mirror_view(HostMemSpace(), var_cc.Get<4>());
 }
 
 // destructor
@@ -123,6 +127,10 @@ int CellCenteredBoundaryVariable::ComputeFluxCorrectionBufferSize(
 //  \brief Set cell-centered boundary buffers for sending to a block on the same level
 
 int CellCenteredBoundaryVariable::LoadBoundaryBufferSameLevel(ParArray1D<Real> &buf,
+                                                                const NeighborBlock &nb) {
+  return 0;
+                                                                }
+int CellCenteredBoundaryVariable::MyLoadBoundaryBufferSameLevel(HostArray1D<Real> &buf,
                                                               const NeighborBlock &nb) {
   MeshBlock *pmb = pmy_block_;
   int si, sj, sk, ei, ej, ek;
@@ -137,10 +145,47 @@ int CellCenteredBoundaryVariable::LoadBoundaryBufferSameLevel(ParArray1D<Real> &
   ek = (nb.ni.ox3 < 0) ? (cellbounds.ks(interior) + NGHOST - 1) : cellbounds.ke(interior);
   int p = 0;
 
-  ParArray4D<Real> var_cc_ = var_cc.Get<4>(); // automatic template deduction fails
-  BufferUtility::PackData(var_cc_, buf, nl_, nu_, si, ei, sj, ej, sk, ek, p, pmb);
+  BufferUtility::PackData(var_cc_h, buf, nl_, nu_, si, ei, sj, ej, sk, ek, p, pmb);
 
   return p;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void CellCenteredBoundaryVariable::SendBoundaryBuffers()
+//  \brief Send boundary buffers of variables
+
+void CellCenteredBoundaryVariable::SendBoundaryBuffers() {
+  MeshBlock *pmb = pmy_block_;
+
+  ParArray4D<Real> var_cc_ = var_cc.Get<4>(); // automatic template deduction fails
+  pmb->deep_copy(var_cc_h, var_cc_);
+  pmb->exec_space.fence(); // need fence for now as copy is sync. Want to hide later.
+
+  int mylevel = pmb->loc.level;
+  for (int n = 0; n < pmb->pbval->nneighbor; n++) {
+    NeighborBlock &nb = pmb->pbval->neighbor[n];
+    if (bd_var_.sflag[nb.bufid] == BoundaryStatus::completed) continue;
+    int ssize;
+    if (nb.snb.level == mylevel)
+      ssize = MyLoadBoundaryBufferSameLevel(bd_var_.send[nb.bufid], nb);
+    //else if (nb.snb.level < mylevel)
+      //ssize = LoadBoundaryBufferToCoarser(bd_var_.send[nb.bufid], nb);
+    //else
+      //ssize = LoadBoundaryBufferToFiner(bd_var_.send[nb.bufid], nb);
+    if (nb.snb.rank == Globals::my_rank) {
+      // on the same process
+      CopyVariableBufferSameProcess(nb, ssize);
+    } else {
+#ifdef MPI_PARALLEL
+      // fence to make sure buffers are loaded and ready to send
+      pmb->exec_space.fence();
+      MPI_Start(&(bd_var_.req_send[nb.bufid]));
+#endif
+    }
+
+    bd_var_.sflag[nb.bufid] = BoundaryStatus::completed;
+  }
+  return;
 }
 
 //----------------------------------------------------------------------------------------
@@ -234,11 +279,41 @@ int CellCenteredBoundaryVariable::LoadBoundaryBufferToFiner(ParArray1D<Real> &bu
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn void CellCenteredBoundaryVariable::SetBoundaries()
+//  \brief set the boundary data
+
+void CellCenteredBoundaryVariable::SetBoundaries() {
+  MeshBlock *pmb = pmy_block_;
+  int mylevel = pmb->loc.level;
+  for (int n = 0; n < pmb->pbval->nneighbor; n++) {
+    NeighborBlock &nb = pmb->pbval->neighbor[n];
+    if (nb.snb.level == mylevel)
+      // TODO(pgrete) FIX interface
+      MySetBoundarySameLevel(bd_var_.recv[nb.bufid], nb);
+    //else if (nb.snb.level < mylevel) // only sets the prolongation buffer
+      //SetBoundaryFromCoarser(bd_var_.recv[nb.bufid], nb);
+    //else
+      //SetBoundaryFromFiner(bd_var_.recv[nb.bufid], nb);
+    bd_var_.flag[nb.bufid] = BoundaryStatus::completed; // completed
+  }
+
+  ParArray4D<Real> var_cc_ = var_cc.Get<4>(); // automatic template deduction fails
+  pmb->deep_copy(var_cc_, var_cc_h);
+  pmb->exec_space.fence(); // need fence for now as copy is sync. Want to hide later.
+
+  return;
+}
+
+void CellCenteredBoundaryVariable::SetBoundarySameLevel(ParArray1D<Real> &buf,
+                                                          const NeighborBlock &nb) {
+  return;
+                                                          }
+//----------------------------------------------------------------------------------------
 //! \fn void CellCenteredBoundaryVariable::SetBoundarySameLevel(ParArray1D<Real> &buf,
 //                                                              const NeighborBlock& nb)
 //  \brief Set cell-centered boundary received from a block on the same level
 
-void CellCenteredBoundaryVariable::SetBoundarySameLevel(ParArray1D<Real> &buf,
+void CellCenteredBoundaryVariable::MySetBoundarySameLevel(HostArray1D<Real> &buf,
                                                         const NeighborBlock &nb) {
   MeshBlock *pmb = pmy_block_;
   int si, sj, sk, ei, ej, ek;
@@ -265,8 +340,10 @@ void CellCenteredBoundaryVariable::SetBoundarySameLevel(ParArray1D<Real> &buf,
 
   int p = 0;
 
+  BufferUtility::UnpackData(buf, var_cc_h, nl_, nu_, si, ei, sj, ej, sk, ek, p, pmb);
   ParArray4D<Real> var_cc_ = var_cc.Get<4>(); // automatic template deduction fails
-  BufferUtility::UnpackData(buf, var_cc_, nl_, nu_, si, ei, sj, ej, sk, ek, p, pmb);
+  pmb->deep_copy(var_cc_, var_cc_h);
+  pmb->exec_space.fence(); // need fence for now as copy is sync. Want to hide later.
 }
 
 //----------------------------------------------------------------------------------------

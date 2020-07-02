@@ -172,7 +172,7 @@ struct BoundaryData { // aggregate and POD (even when MPI_PARALLEL is defined)
   // currently, sflag[] is only used by Multgrid (send buffers are reused each stage in
   // red-black comm. pattern; need to check if they are available)
   BoundaryStatus flag[kMaxNeighbor], sflag[kMaxNeighbor];
-  ParArray1D<Real> send[kMaxNeighbor], recv[kMaxNeighbor];
+  Kokkos::View<Real *, LayoutWrapper, HostMemSpace> send[kMaxNeighbor], recv[kMaxNeighbor];
 #ifdef MPI_PARALLEL
   MPI_Request req_send[kMaxNeighbor], req_recv[kMaxNeighbor];
 #endif

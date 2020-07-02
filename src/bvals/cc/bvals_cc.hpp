@@ -39,6 +39,7 @@ class CellCenteredBoundaryVariable : public BoundaryVariable {
 
   // may want to rebind var_cc to u,u1,u2,w,w1, etc. registers for time integrator logic.
   ParArrayND<Real> var_cc;
+  Kokkos::View<Real ****, LayoutWrapper, HostMemSpace> var_cc_h;
   ParArrayND<Real> coarse_buf; // may pass nullptr if mesh refinement is unsupported
 
   // currently, no need to ever switch flux[] ---> keep as reference members (not ptrs)
@@ -63,12 +64,17 @@ class CellCenteredBoundaryVariable : public BoundaryVariable {
   // BoundaryBuffer:
   void SendFluxCorrection() final;
   bool ReceiveFluxCorrection() final;
+  void SendBoundaryBuffers() final;
+  void SetBoundaries() final;
 
  protected:
   int nl_, nu_;
 
  private:
   // BoundaryBuffer:
+  int MyLoadBoundaryBufferSameLevel(HostArray1D<Real> &buf, const NeighborBlock &nb);
+  void MySetBoundarySameLevel(HostArray1D<Real> &buf, const NeighborBlock &nb);
+
   int LoadBoundaryBufferSameLevel(ParArray1D<Real> &buf, const NeighborBlock &nb) final;
   void SetBoundarySameLevel(ParArray1D<Real> &buf, const NeighborBlock &nb) final;
 
