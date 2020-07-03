@@ -158,151 +158,161 @@ struct BndInfo {
 //  Hardcoded test of boundary filling routine for non-MPI, no mesh refinement sims
 void CellCenteredBoundaryVariable::SendBoundaryBuffers() {
   MeshBlock *pmb = pmy_block_;
+  // for now the container doens't matter as we only use a single signal
+  auto &base = pmb->real_containers.Get("base");
 
-  // check which and how many meshblocks need to be handled
-  int num_nmb = 0;
+  if (base->buffer_send == 0) {
 
-  for (int n = 0; n < pmb->pbval->nneighbor; n++) {
-    NeighborBlock &nb = pmb->pbval->neighbor[n];
-    if (bd_var_.sflag[nb.bufid] == BoundaryStatus::completed) {
-      continue;
-    } else {
-      num_nmb++;
+    // check which and how many meshblocks need to be handled
+    int num_nmb = 0;
+
+    for (int n = 0; n < pmb->pbval->nneighbor; n++) {
+      NeighborBlock &nb = pmb->pbval->neighbor[n];
+      if (bd_var_.sflag[nb.bufid] == BoundaryStatus::completed) {
+        continue;
+      } else {
+        num_nmb++;
+      }
     }
-  }
-  // BndInfo *bnd_info_all = new BndInfo[num_nmb];
-  BndInfo bnd_info_all[57];
-  // fill boundary info buffer
-  int mb = 0;
-  for (int n = 0; n < pmb->pbval->nneighbor; n++) {
-    NeighborBlock &nb = pmb->pbval->neighbor[n];
-    if (bd_var_.sflag[nb.bufid] == BoundaryStatus::completed) {
-      continue;
-    } else {
-      IndexDomain interior = IndexDomain::interior;
-      const IndexShape &cellbounds = pmb->cellbounds;
-      bnd_info_all[mb].si = (nb.ni.ox1 > 0) ? (cellbounds.ie(interior) - NGHOST + 1)
-                                            : cellbounds.is(interior);
-      bnd_info_all[mb].ei = (nb.ni.ox1 < 0) ? (cellbounds.is(interior) + NGHOST - 1)
-                                            : cellbounds.ie(interior);
-      bnd_info_all[mb].sj = (nb.ni.ox2 > 0) ? (cellbounds.je(interior) - NGHOST + 1)
-                                            : cellbounds.js(interior);
-      bnd_info_all[mb].ej = (nb.ni.ox2 < 0) ? (cellbounds.js(interior) + NGHOST - 1)
-                                            : cellbounds.je(interior);
-      bnd_info_all[mb].sk = (nb.ni.ox3 > 0) ? (cellbounds.ke(interior) - NGHOST + 1)
-                                            : cellbounds.ks(interior);
-      bnd_info_all[mb].ek = (nb.ni.ox3 < 0) ? (cellbounds.ks(interior) + NGHOST - 1)
-                                            : cellbounds.ke(interior);
-      // Locate target buffer
-      // 1) which MeshBlock?
-      MeshBlock *ptarget_block = pmy_mesh_->FindMeshBlock(nb.snb.gid);
-      // 2) which element in vector of BoundaryVariable *?
-      bnd_info_all[mb].buf =
-          ptarget_block->pbval->bvars[bvar_index]->GetBdVar()->recv[nb.targetid];
+    // BndInfo *bnd_info_all = new BndInfo[num_nmb];
+    BndInfo bnd_info_all[57];
+    // fill boundary info buffer
+    int mb = 0;
+    for (int n = 0; n < pmb->pbval->nneighbor; n++) {
+      NeighborBlock &nb = pmb->pbval->neighbor[n];
+      if (bd_var_.sflag[nb.bufid] == BoundaryStatus::completed) {
+        continue;
+      } else {
+        IndexDomain interior = IndexDomain::interior;
+        const IndexShape &cellbounds = pmb->cellbounds;
+        bnd_info_all[mb].si = (nb.ni.ox1 > 0) ? (cellbounds.ie(interior) - NGHOST + 1)
+                                              : cellbounds.is(interior);
+        bnd_info_all[mb].ei = (nb.ni.ox1 < 0) ? (cellbounds.is(interior) + NGHOST - 1)
+                                              : cellbounds.ie(interior);
+        bnd_info_all[mb].sj = (nb.ni.ox2 > 0) ? (cellbounds.je(interior) - NGHOST + 1)
+                                              : cellbounds.js(interior);
+        bnd_info_all[mb].ej = (nb.ni.ox2 < 0) ? (cellbounds.js(interior) + NGHOST - 1)
+                                              : cellbounds.je(interior);
+        bnd_info_all[mb].sk = (nb.ni.ox3 > 0) ? (cellbounds.ke(interior) - NGHOST + 1)
+                                              : cellbounds.ks(interior);
+        bnd_info_all[mb].ek = (nb.ni.ox3 < 0) ? (cellbounds.ks(interior) + NGHOST - 1)
+                                              : cellbounds.ke(interior);
+        // Locate target buffer
+        // 1) which MeshBlock?
+        MeshBlock *ptarget_block = pmy_mesh_->FindMeshBlock(nb.snb.gid);
+        // 2) which element in vector of BoundaryVariable *?
+        bnd_info_all[mb].buf =
+            ptarget_block->pbval->bvars[bvar_index]->GetBdVar()->recv[nb.targetid];
 
-      mb++;
+        mb++;
+      }
     }
-  }
 
-  ParArray4D<Real> var_cc_ = var_cc.Get<4>(); // automatic template deduction fails
-  const auto sn = nl_;
-  const auto en = nu_;
-  Kokkos::parallel_for(
-      "CellCenteredVar::SendBoundaryBuffers TeamPolicy",
-      Kokkos::Experimental::require(
-          team_policy(pmb->exec_space, num_nmb, Kokkos::AUTO),
-          Kokkos::Experimental::WorkItemProperty::HintLightWeight),
-      KOKKOS_LAMBDA(team_mbr_t team_member) {
-        const int mb = team_member.league_rank();
-        const int si = bnd_info_all[mb].si;
-        const int ei = bnd_info_all[mb].ei;
-        const int sj = bnd_info_all[mb].sj;
-        const int ej = bnd_info_all[mb].ej;
-        const int sk = bnd_info_all[mb].sk;
-        const int ek = bnd_info_all[mb].ek;
-        const int Ni = ei + 1 - si;
-        const int Nj = ej + 1 - sj;
-        const int Nk = ek + 1 - sk;
-        const int Nn = en + 1 - sn;
-        const int NnNkNj = Nn * Nk * Nj;
-        const int NkNj = Nk * Nj;
+    ParArray4D<Real> var_cc_ = var_cc.Get<4>(); // automatic template deduction fails
+    const auto sn = nl_;
+    const auto en = nu_;
+    Kokkos::parallel_for(
+        "CellCenteredVar::SendBoundaryBuffers TeamPolicy",
+        Kokkos::Experimental::require(
+            team_policy(pmb->exec_space, num_nmb, Kokkos::AUTO),
+            Kokkos::Experimental::WorkItemProperty::HintLightWeight),
+        KOKKOS_LAMBDA(team_mbr_t team_member) {
+          const int mb = team_member.league_rank();
+          const int si = bnd_info_all[mb].si;
+          const int ei = bnd_info_all[mb].ei;
+          const int sj = bnd_info_all[mb].sj;
+          const int ej = bnd_info_all[mb].ej;
+          const int sk = bnd_info_all[mb].sk;
+          const int ek = bnd_info_all[mb].ek;
+          const int Ni = ei + 1 - si;
+          const int Nj = ej + 1 - sj;
+          const int Nk = ek + 1 - sk;
+          const int Nn = en + 1 - sn;
+          const int NnNkNj = Nn * Nk * Nj;
+          const int NkNj = Nk * Nj;
 
-        Kokkos::parallel_for(
-            Kokkos::TeamThreadRange<>(team_member, NnNkNj), [&](const int idx) {
-              int n = idx / NkNj;
-              int k = (idx - n * NkNj) / Nj;
-              int j = idx - n * NkNj - k * Nj;
-              n += sn;
-              k += sk;
-              j += sj;
+          Kokkos::parallel_for(
+              Kokkos::TeamThreadRange<>(team_member, NnNkNj), [&](const int idx) {
+                int n = idx / NkNj;
+                int k = (idx - n * NkNj) / Nj;
+                int j = idx - n * NkNj - k * Nj;
+                n += sn;
+                k += sk;
+                j += sj;
 
-              Kokkos::parallel_for(
-                  Kokkos::ThreadVectorRange(team_member, si, ei + 1), [&](const int i) {
-                    // original offset is ignored here
-                    bnd_info_all[mb].buf(i - si +
-                                         Ni * (j - sj + Nj * (k - sk + Nk * (n - sn)))) =
-                        var_cc_(n, k, j, i);
-                  });
-            });
+                Kokkos::parallel_for(
+                    Kokkos::ThreadVectorRange(team_member, si, ei + 1), [&](const int i) {
+                      // original offset is ignored here
+                      bnd_info_all[mb].buf(
+                          i - si + Ni * (j - sj + Nj * (k - sk + Nk * (n - sn)))) =
+                          var_cc_(n, k, j, i);
+                    });
+              });
 
-        // Kokkos::parallel_for(
-        //     Kokkos::TeamVectorRange(team_member, NnNkNjNi), [&](const int idx) {
-        //       int n = idx / NkNjNi;
-        //       int k = (idx - n * NkNjNi) / NjNi;
-        //       int j = (idx - n * NkNjNi - k * NjNi) / Ni;
-        //       int i = idx - n * NkNjNi - k * NjNi - j * Ni;
-        //       n += sn;
-        //       k += sk;
-        //       j += sj;
-        //       i += si;
-        //       // original offset is ignored here
-        //       bnd_info_all[mb].buf(i - si +
-        //                            Ni * (j - sj + Nj * (k - sk + Nk * (n - sn)))) =
-        //           var_cc_(n, k, j, i);
-        //     });
-      });
+          // Kokkos::parallel_for(
+          //     Kokkos::TeamVectorRange(team_member, NnNkNjNi), [&](const int idx) {
+          //       int n = idx / NkNjNi;
+          //       int k = (idx - n * NkNjNi) / NjNi;
+          //       int j = (idx - n * NkNjNi - k * NjNi) / Ni;
+          //       int i = idx - n * NkNjNi - k * NjNi - j * Ni;
+          //       n += sn;
+          //       k += sk;
+          //       j += sj;
+          //       i += si;
+          //       // original offset is ignored here
+          //       bnd_info_all[mb].buf(i - si +
+          //                            Ni * (j - sj + Nj * (k - sk + Nk * (n - sn)))) =
+          //           var_cc_(n, k, j, i);
+          //     });
+        });
 #ifdef __UNUSED
-  Kokkos::parallel_for(
-      "CellCenteredVar::SendBoundaryBuffers RangePolicy",
-      Kokkos::RangePolicy<>(pmb->exec_space, 0, num_nmb), KOKKOS_LAMBDA(const int mb) {
-        const int si = bnd_info_all[mb].si;
-        const int ei = bnd_info_all[mb].ei;
-        const int sj = bnd_info_all[mb].sj;
-        const int ej = bnd_info_all[mb].ej;
-        const int sk = bnd_info_all[mb].sk;
-        const int ek = bnd_info_all[mb].ek;
-        const int sn = bnd_info_all[mb].sn;
-        const int en = bnd_info_all[mb].en;
-        const int ni = ei + 1 - si;
-        const int nj = ej + 1 - sj;
-        const int nk = ek + 1 - sk;
+    Kokkos::parallel_for(
+        "CellCenteredVar::SendBoundaryBuffers RangePolicy",
+        Kokkos::RangePolicy<>(pmb->exec_space, 0, num_nmb), KOKKOS_LAMBDA(const int mb) {
+          const int si = bnd_info_all[mb].si;
+          const int ei = bnd_info_all[mb].ei;
+          const int sj = bnd_info_all[mb].sj;
+          const int ej = bnd_info_all[mb].ej;
+          const int sk = bnd_info_all[mb].sk;
+          const int ek = bnd_info_all[mb].ek;
+          const int sn = bnd_info_all[mb].sn;
+          const int en = bnd_info_all[mb].en;
+          const int ni = ei + 1 - si;
+          const int nj = ej + 1 - sj;
+          const int nk = ek + 1 - sk;
 
-        for (int n = sn; n <= en; ++n) {
-          for (int k = sk; k <= ek; ++k) {
-            for (int j = sj; j <= ej; ++j) {
-              for (int i = si; i <= ei; ++i) {
-                // original offset is ignored here
-                bnd_info_all[mb].recv_buf(i - si +
-                                          ni * (j - sj + nj * (k - sk + nk * (n - sn)))) =
-                    var_cc_(n, k, j, i);
+          for (int n = sn; n <= en; ++n) {
+            for (int k = sk; k <= ek; ++k) {
+              for (int j = sj; j <= ej; ++j) {
+                for (int i = si; i <= ei; ++i) {
+                  // original offset is ignored here
+                  bnd_info_all[mb].recv_buf(
+                      i - si + ni * (j - sj + nj * (k - sk + nk * (n - sn)))) =
+                      var_cc_(n, k, j, i);
+                }
               }
             }
           }
-        }
-      });
+        });
 #endif
-  pmb->exec_space.fence();
-
-  // set all flags completed (even once that were before)
-  for (int n = 0; n < pmb->pbval->nneighbor; n++) {
-    NeighborBlock &nb = pmb->pbval->neighbor[n];
-    bd_var_.sflag[nb.bufid] = BoundaryStatus::completed;
-    // Locate target buffer
-    // 1) which MeshBlock?
-    MeshBlock *ptarget_block = pmy_mesh_->FindMeshBlock(nb.snb.gid);
-    // 2) which element in vector of BoundaryVariable *?
-    BoundaryData<> *ptarget_bdata = (ptarget_block->pbval->bvars[bvar_index]->GetBdVar());
-    ptarget_bdata->flag[nb.targetid] = BoundaryStatus::arrived;
+    cudaEventRecord(base->event_buffer_send, pmb->exec_space.cuda_stream());
+    base->buffer_send = 1;
+  } else {
+    if (cudaEventQuery(base->event_buffer_send) == cudaSuccess) {
+      // set all flags completed (even once that were before)
+      for (int n = 0; n < pmb->pbval->nneighbor; n++) {
+        NeighborBlock &nb = pmb->pbval->neighbor[n];
+        bd_var_.sflag[nb.bufid] = BoundaryStatus::completed;
+        // Locate target buffer
+        // 1) which MeshBlock?
+        MeshBlock *ptarget_block = pmy_mesh_->FindMeshBlock(nb.snb.gid);
+        // 2) which element in vector of BoundaryVariable *?
+        BoundaryData<> *ptarget_bdata =
+            (ptarget_block->pbval->bvars[bvar_index]->GetBdVar());
+        ptarget_bdata->flag[nb.targetid] = BoundaryStatus::arrived;
+      }
+      base->buffer_send = 2;
+    }
   }
   // delete[] bnd_info_all;
   return;

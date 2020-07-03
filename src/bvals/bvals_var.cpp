@@ -164,19 +164,19 @@ void BoundaryVariable::SendBoundaryBuffers() {
       ssize = LoadBoundaryBufferToFiner(bd_var_.send[nb.bufid], nb);
     if (nb.snb.rank == Globals::my_rank) {
       // on the same process
-  //    CopyVariableBufferSameProcess(nb, ssize);
-  MeshBlock *ptarget_block = pmy_mesh_->FindMeshBlock(nb.snb.gid);
-  // 2) which element in vector of BoundaryVariable *?
-  BoundaryData<> *ptarget_bdata = &(ptarget_block->pbval->bvars[bvar_index]->bd_var_);
-  // TODO(pgrete) ensure/double check that the data on target has already been used before
-  // overwriting it
-  // using source block for deep copy to ensure physics kernels are done
-  MeshBlock *psource_block = pmy_block_;
-  psource_block->deep_copy(ptarget_bdata->recv[nb.targetid], bd_var_.send[nb.bufid]);
-  // need fence here as deep_copy is async
-  //psource_block->exec_space.fence();
-  // finally, set the BoundaryStatus flag on the destination buffer
-  //ptarget_bdata->flag[nb.targetid] = BoundaryStatus::arrived;
+      //    CopyVariableBufferSameProcess(nb, ssize);
+      MeshBlock *ptarget_block = pmy_mesh_->FindMeshBlock(nb.snb.gid);
+      // 2) which element in vector of BoundaryVariable *?
+      BoundaryData<> *ptarget_bdata = &(ptarget_block->pbval->bvars[bvar_index]->bd_var_);
+      // TODO(pgrete) ensure/double check that the data on target has already been used
+      // before overwriting it using source block for deep copy to ensure physics kernels
+      // are done
+      MeshBlock *psource_block = pmy_block_;
+      psource_block->deep_copy(ptarget_bdata->recv[nb.targetid], bd_var_.send[nb.bufid]);
+      // need fence here as deep_copy is async
+      // psource_block->exec_space.fence();
+      // finally, set the BoundaryStatus flag on the destination buffer
+      // ptarget_bdata->flag[nb.targetid] = BoundaryStatus::arrived;
     } else {
 #ifdef MPI_PARALLEL
       // fence to make sure buffers are loaded and ready to send
@@ -184,15 +184,14 @@ void BoundaryVariable::SendBoundaryBuffers() {
       MPI_Start(&(bd_var_.req_send[nb.bufid]));
 #endif
     }
-
   }
   pmb->exec_space.fence();
   for (int n = 0; n < pmb->pbval->nneighbor; n++) {
     NeighborBlock &nb = pmb->pbval->neighbor[n];
     if (bd_var_.sflag[nb.bufid] == BoundaryStatus::completed) continue;
-  MeshBlock *ptarget_block = pmy_mesh_->FindMeshBlock(nb.snb.gid);
-  // 2) which element in vector of BoundaryVariable *?
-  BoundaryData<> *ptarget_bdata = &(ptarget_block->pbval->bvars[bvar_index]->bd_var_);
+    MeshBlock *ptarget_block = pmy_mesh_->FindMeshBlock(nb.snb.gid);
+    // 2) which element in vector of BoundaryVariable *?
+    BoundaryData<> *ptarget_bdata = &(ptarget_block->pbval->bvars[bvar_index]->bd_var_);
     ptarget_bdata->flag[nb.targetid] = BoundaryStatus::arrived;
     bd_var_.sflag[nb.bufid] = BoundaryStatus::completed;
   }

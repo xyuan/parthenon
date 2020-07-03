@@ -19,6 +19,7 @@
 #include <utility>
 #include <vector>
 
+#include "basic_types.hpp"
 #include "globals.hpp"
 #include "interface/sparse_variable.hpp"
 #include "interface/variable.hpp"
@@ -276,8 +277,14 @@ class Container {
   void ClearBoundary(BoundaryCommSubset phase);
   void SendFluxCorrection();
   bool ReceiveFluxCorrection();
+  cudaEvent_t event_buffer_send;
+  int buffer_send = 0;
   static TaskStatus StartReceivingTask(std::shared_ptr<Container<T>> rc) {
     rc->StartReceiving(BoundaryCommSubset::all);
+
+    auto &base = rc->pmy_block->real_containers.Get("base");
+    cudaEventCreate(&base->event_buffer_send); //, cudaEventDisableTiming);
+    base->buffer_send = 0;
     return TaskStatus::complete;
   }
   static TaskStatus SendFluxCorrectionTask(std::shared_ptr<Container<T>> rc) {
@@ -290,7 +297,15 @@ class Container {
   }
   static TaskStatus SendBoundaryBuffersTask(std::shared_ptr<Container<T>> rc) {
     rc->SendBoundaryBuffers();
-    return TaskStatus::complete;
+
+    auto &base = rc->pmy_block->real_containers.Get("base");
+    if (base->buffer_send == 2) {
+      // std::cout << "complete";
+      return TaskStatus::complete;
+    } else {
+      // std::cout << "NOT";
+      return TaskStatus::incomplete;
+    }
   }
   static TaskStatus ReceiveBoundaryBuffersTask(std::shared_ptr<Container<T>> rc) {
     if (!rc->ReceiveBoundaryBuffers()) return TaskStatus::incomplete;
