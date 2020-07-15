@@ -19,6 +19,7 @@ import errno
 import os
 from shutil import rmtree
 import subprocess
+from subprocess import PIPE
 import sys
 
 # TODO(pgrete) update CI image to Python 3
@@ -207,12 +208,13 @@ class TestManager:
         print(run_command)
         sys.stdout.flush()
         try:
-            subprocess.check_call(run_command)
+            proc = subprocess.run(run_command, check=True, stdout=PIPE, stderr=PIPE)
+            return proc.stdout
         except subprocess.CalledProcessError as err:
             raise TestManagerError('\nReturn code {0} from command \'{1}\''
                               .format(err.returncode, ' '.join(err.cmd)))
 
-    def Analyse(self):
+    def Analyse(self, stdouts):
 
         test_pass = False
 
@@ -220,7 +222,7 @@ class TestManager:
         print("Analysing Driver Output")
         print("*****************************************************************")
         sys.stdout.flush()
-        test_pass = self.test_case.Analyse(self.parameters)
+        test_pass = self.test_case.Analyse(self.parameters, stdouts)
 
         return test_pass
 
