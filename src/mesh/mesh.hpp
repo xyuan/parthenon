@@ -302,6 +302,9 @@ class Mesh {
   friend class MeshRefinement;
 
  public:
+  // default constructor for testing infrastructure
+  explicit Mesh(int num_dims)
+      : ndim(num_dims), multilevel(true), adaptive(false), AMRFlag_(nullptr) {}
   // 2x function overloads of ctor: normal and restarted simulation
   Mesh(ParameterInput *pin, Properties_t &properties, Packages_t &packages,
        int test_flag = 0);

@@ -37,6 +37,8 @@ class MeshBlockTree {
   friend class BoundaryBase;
 
  public:
+  // default constructor for testing infrastructure
+  MeshBlockTree() : pleaf_(nullptr), gid_(0) {}
   explicit MeshBlockTree(Mesh *pmesh);
   MeshBlockTree(MeshBlockTree *parent, int ox1, int ox2, int ox3);
   ~MeshBlockTree();
