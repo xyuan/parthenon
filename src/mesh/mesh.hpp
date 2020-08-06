@@ -23,6 +23,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <list>
 #include <map>
 #include <memory>
 #include <string>
@@ -171,8 +172,6 @@ class MeshBlock {
 
   BoundaryFlag boundary_flag[6];
 
-  MeshBlock *prev, *next;
-
   // functions
 
   //----------------------------------------------------------------------------------------
@@ -262,7 +261,7 @@ class MeshBlock {
   void UserWorkBeforeOutput(ParameterInput *pin); // called in Mesh fn (friend class)
   void UserWorkInLoop();                          // called in TimeIntegratorTaskList
   void SetBlockTimestep(const Real dt) { new_block_dt_ = dt; }
-  Real NewDt() { return new_block_dt_; }
+  Real NewDt() const { return new_block_dt_; }
 
  private:
   // data
@@ -316,8 +315,9 @@ class Mesh {
   int GetNumMeshBlocksThisRank(int my_rank) { return nblist[my_rank]; }
   int GetNumMeshThreads() const { return num_mesh_threads_; }
   std::int64_t GetTotalCells() {
-    return static_cast<std::int64_t>(nbtotal) * pblock->block_size.nx1 *
-           pblock->block_size.nx2 * pblock->block_size.nx3;
+    auto &mb = block_list.front();
+    return static_cast<std::int64_t>(nbtotal) * mb.block_size.nx1 * mb.block_size.nx2 *
+           mb.block_size.nx3;
   }
 
   // data
@@ -333,7 +333,7 @@ class Mesh {
   int gflag;
 
   // ptr to first MeshBlock (node) in linked list of blocks belonging to this MPI rank:
-  MeshBlock *pblock;
+  std::list<MeshBlock> block_list;
   Properties_t properties;
   Packages_t packages;
 
@@ -353,7 +353,9 @@ class Mesh {
                                    LogicalLocation &newloc);
   void FillSameRankFineToCoarseAMR(MeshBlock *pob, MeshBlock *pmb, LogicalLocation &loc);
   int CreateAMRMPITag(int lid, int ox1, int ox2, int ox3);
-  MeshBlock *FindMeshBlock(int tgid);
+
+  std::list<MeshBlock>::iterator FindMeshBlock(int tgid);
+
   void ApplyUserWorkBeforeOutput(ParameterInput *pin);
 
   // function for distributing unique "phys" bitfield IDs to BoundaryVariable objects and
@@ -366,27 +368,32 @@ class Mesh {
   int GetRootLevel() { return root_level; }
   int GetMaxLevel() { return max_level; }
   int GetCurrentLevel() { return current_level; }
-  std::vector<int> GetNbList() {
-    std::vector<int> nlist;
-    nlist.assign(nblist, nblist + Globals::nranks);
-    return nlist;
-  }
+  std::vector<int> GetNbList() { return nblist; }
 
  private:
   // data
   int next_phys_id_; // next unused value for encoding final component of MPI tag bitfield
   int root_level, max_level, current_level;
   int num_mesh_threads_;
-  int *nslist, *ranklist, *nblist;
-  double *costlist;
+  /// Maps Global Block IDs to which rank the block is mapped to.
+  std::vector<int> ranklist;
+  /// Maps rank to start of local block IDs.
+  std::vector<int> nslist;
+  /// Maps rank to count of local blocks.
+  std::vector<int> nblist;
+  /// Maps global block ID to its cost
+  std::vector<double> costlist;
   // 8x arrays used exclusively for AMR (not SMR):
-  int *nref, *nderef;
-  int *rdisp, *ddisp;
-  int *bnref, *bnderef;
-  int *brdisp, *bddisp;
+  /// Count of blocks to refine on each rank
+  std::vector<int> nref;
+  /// Count of blocks to de-refine on each rank
+  std::vector<int> nderef;
+  std::vector<int> rdisp, ddisp;
+  std::vector<int> bnref, bnderef;
+  std::vector<int> brdisp, bddisp;
   // the last 4x should be std::size_t, but are limited to int by MPI
 
-  LogicalLocation *loclist;
+  std::vector<LogicalLocation> loclist;
   MeshBlockTree tree;
   // number of MeshBlocks in the x1, x2, x3 directions of the root grid:
   // (unlike LogicalLocation.lxi, nrbxi don't grow w/ AMR # of levels, so keep 32-bit int)
@@ -396,10 +403,6 @@ class Mesh {
 
   // flags are false if using non-uniform or user meshgen function
   bool use_uniform_meshgen_fn_[4];
-
-  int nuser_history_output_;
-  std::string *user_history_output_names_;
-  UserHistoryOperation *user_history_ops_;
 
   // variables for load balancing control
   bool lb_flag_, lb_automatic_, lb_manual_;
@@ -412,11 +415,12 @@ class Mesh {
   AMRFlagFunc AMRFlag_;
   SrcTermFunc UserSourceTerm_;
   TimeStepFunc UserTimeStep_;
-  HistoryOutputFunc *user_history_func_;
   MetricFunc UserMetric_;
 
   void OutputMeshStructure(int dim);
-  void CalculateLoadBalance(double *clist, int *rlist, int *slist, int *nlist, int nb);
+  void CalculateLoadBalance(std::vector<double> const &costlist,
+                            std::vector<int> &ranklist, std::vector<int> &nslist,
+                            std::vector<int> &nblist);
   void ResetLoadBalanceVariables();
 
   void ReserveMeshBlockPhysIDs();
@@ -453,9 +457,6 @@ class Mesh {
   void EnrollUserMeshGenerator(CoordinateDirection dir, MeshGenFunc my_mg);
   void EnrollUserExplicitSourceFunction(SrcTermFunc my_func);
   void EnrollUserTimeStepFunction(TimeStepFunc my_func);
-  void AllocateUserHistoryOutput(int n);
-  void EnrollUserHistoryOutput(int i, HistoryOutputFunc my_func, const char *name,
-                               UserHistoryOperation op = UserHistoryOperation::sum);
   void EnrollUserMetric(MetricFunc my_func);
 };
 
