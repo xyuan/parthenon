@@ -81,6 +81,7 @@ class MeshBlock {
 
  public:
   MeshBlock(const int n_side, const int ndim); // for Kokkos testing with ghost
+  MeshBlock(const int n_side, const int ndim, const Real xmin, const Real xmax);
   MeshBlock(int igid, int ilid, LogicalLocation iloc, RegionSize input_size,
             BoundaryFlag *input_bcs, Mesh *pm, ParameterInput *pin,
             Properties_t &properties, int igflag, bool ref_flag = false);

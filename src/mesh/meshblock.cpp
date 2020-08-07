@@ -58,6 +58,21 @@ MeshBlock::MeshBlock(const int n_side, const int ndim)
   } else {
     InitializeIndexShapes(n_side, n_side, n_side);
   }
+  auto &real_container = real_containers.Get();
+  real_container->setBlock(this);
+}
+
+MeshBlock::MeshBlock(const int n_side, const int ndim, const Real xmin, const Real xmax)
+    : MeshBlock(n_side, ndim) {
+  block_size.x1min = xmin;
+  block_size.x1max = xmax;
+  block_size.x2min = xmin;
+  block_size.x2max = xmax;
+  block_size.x3min = xmin;
+  block_size.x3max = xmax;
+  block_size.nx1 = cellbounds.ncellsi(IndexDomain::interior);
+  block_size.nx2 = cellbounds.ncellsj(IndexDomain::interior);
+  block_size.nx3 = cellbounds.ncellsk(IndexDomain::interior);
 }
 
 MeshBlock::MeshBlock(int igid, int ilid, LogicalLocation iloc, RegionSize input_block,

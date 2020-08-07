@@ -15,23 +15,28 @@
 // the public, perform publicly and display publicly, and to permit others to do so.
 //========================================================================================
 
+#include <array>
 #include <iostream>
 
 #include <catch2/catch.hpp>
 
+#include "config.hpp"
 #include "coordinates/coordinates.hpp"
 #include "defs.hpp"
+#include "interface/metadata.hpp"
+#include "interface/variable.hpp"
 #include "mesh/domain.hpp"
 #include "mesh/mesh.hpp"
 #include "mesh/mesh_refinement.hpp"
-#include "parameter_input.hpp"
 
+using parthenon::CellVariable;
 using parthenon::Coordinates_t;
 using parthenon::IndexDomain;
+using parthenon::IndexShape;
 using parthenon::Mesh;
 using parthenon::MeshBlock;
 using parthenon::MeshRefinement;
-using parthenon::ParameterInput;
+using parthenon::Metadata;
 using parthenon::Real;
 
 constexpr int NSIDE = 16;
@@ -41,21 +46,20 @@ constexpr Real XMAX = 1;
 
 TEST_CASE("Prolongation from coarse to fine cells for cell-centered variables",
           "[CellVariable][MeshRefinement][Coverage]") {
-  GIVEN("meshblock, mesh, input, meshrefinement, and cellvariable objects") {
-    ParameterInput input;
-    Mesh mesh(NDIM);
+  GIVEN("meshblock, meshrefinement, and cellvariable objects") {
     MeshBlock mb(NSIDE, NDIM);
-    mb.pmy_mesh = &mesh;
-    mb.block_size.x1min = XMIN;
-    mb.block_size.x1max = XMAX;
-    mb.block_size.x2min = XMIN;
-    mb.block_size.x2max = XMAX;
-    mb.block_size.x3min = XMIN;
-    mb.block_size.x3max = XMAX;
-    mb.block_size.nx1 = mb.cellbounds.ncellsi(IndexDomain::interior);
-    mb.block_size.nx2 = mb.cellbounds.ncellsj(IndexDomain::interior);
-    mb.block_size.nx3 = mb.cellbounds.ncellsk(IndexDomain::interior);
-    mb.coords = Coordinates_t(mb.block_size, &input);
-    MeshRefinement refinement(&mb, &input);
+    mb.c_cellbounds = IndexShape(NSIDE / 2, NSIDE / 2, NSIDE / 2, NGHOST);
+    mb.coords = Coordinates_t(mb.block_size);
+    MeshRefinement refinement(&mb, mb.coords);
+
+    const std::array<int,6> shape = {mb.cellbounds.ncellsi(IndexDomain::entire),
+                                     mb.cellbounds.ncellsj(IndexDomain::entire),
+                                     mb.cellbounds.ncellsk(IndexDomain::entire),
+                                     1,
+                                     1,
+                                     1};
+    Metadata m({Metadata::Cell});
+    CellVariable<Real> v("var", shape, m);
+    v.AllocateCoarseCells(mb.c_cellbounds);
   }
 }

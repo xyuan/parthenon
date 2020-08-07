@@ -26,7 +26,7 @@ namespace parthenon {
 class UniformCartesian {
  public:
   UniformCartesian() = default;
-  UniformCartesian(const RegionSize &rs, ParameterInput *pin) {
+  explicit UniformCartesian(const RegionSize &rs) {
     dx_[0] = (rs.x1max - rs.x1min) / rs.nx1;
     dx_[1] = (rs.x2max - rs.x2min) / rs.nx2;
     dx_[2] = (rs.x3max - rs.x3min) / rs.nx3;
@@ -41,6 +41,7 @@ class UniformCartesian {
     xmin_[1] = rs.x2min - istart_[1] * dx_[1];
     xmin_[2] = rs.x3min - istart_[2] * dx_[2];
   }
+  UniformCartesian(const RegionSize &rs, ParameterInput *pin) : UniformCartesian(rs) {}
   UniformCartesian(const UniformCartesian &src, int coarsen) {
     istart_ = src.GetStartIndex();
     dx_ = src.Dx_();

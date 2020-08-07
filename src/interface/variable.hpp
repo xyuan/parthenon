@@ -37,6 +37,7 @@
 #include "bvals/cc/bvals_cc.hpp"
 #include "defs.hpp"
 #include "interface/metadata.hpp"
+#include "mesh/domain.hpp"
 #include "parthenon_arrays.hpp"
 
 namespace parthenon {
@@ -83,6 +84,9 @@ class CellVariable {
 
   /// allocate communication space based on info in MeshBlock
   void allocateComms(MeshBlock *pmb);
+  /// pieces of allocateComms. Used for testing the infrastructure.
+  void AllocateFluxes();
+  void AllocateCoarseCells(const IndexShape &c_cellbounds);
 
   /// Repoint vbvar's var_cc array at the current variable
   void resetBoundary() { vbvar->var_cc = data; }

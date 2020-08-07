@@ -46,6 +46,10 @@ class MeshRefinement {
 
  public:
   MeshRefinement(MeshBlock *pmb, ParameterInput *pin);
+  // public constructor with fewer dependencies, for testing
+  MeshRefinement(MeshBlock *pmb, int deref_threshold, AMRFlagFunc AMRFlag,
+                 Coordinates_t coords);
+  MeshRefinement(MeshBlock *pmb, Coordinates_t coords);
 
   // functions
   void RestrictCellCenteredValues(const ParArrayND<Real> &fine, ParArrayND<Real> &coarse,
@@ -77,6 +81,8 @@ class MeshRefinement {
   int AddToRefinement(FaceField *pvar_fc, FaceField *pcoarse_fc);
 
  private:
+  void CheckGhostCells();
+
   // data
   MeshBlock *pmy_block_;
   Coordinates_t coarse_coords;

@@ -47,14 +47,20 @@ MeshRefinement::MeshRefinement(MeshBlock *pmb, ParameterInput *pin)
       AMRFlag_(pmb->pmy_mesh->AMRFlag_) {
   // Create coarse mesh object for parent grid
   coarse_coords = Coordinates_t(pmb->coords, 2);
+  CheckGhostCells();
+}
 
-  if (NGHOST % 2) {
-    std::stringstream msg;
-    msg << "### FATAL ERROR in MeshRefinement constructor" << std::endl
-        << "Selected --nghost=" << NGHOST << " is incompatible with mesh refinement.\n"
-        << "Reconfigure with an even number of ghost cells " << std::endl;
-    PARTHENON_FAIL(msg);
-  }
+MeshRefinement::MeshRefinement(MeshBlock *pmb, int deref_threshold, AMRFlagFunc AMRFlag,
+                               Coordinates_t coords)
+    : pmy_block_(pmb), deref_count_(0), deref_threshold_(deref_threshold),
+      AMRFlag_(AMRFlag), coarse_coords(coords, 2) {
+  CheckGhostCells();
+}
+
+MeshRefinement::MeshRefinement(MeshBlock *pmb, Coordinates_t coords)
+    : pmy_block_(pmb), deref_count_(0), deref_threshold_(10), AMRFlag_(nullptr),
+      coarse_coords(coords, 2) {
+  CheckGhostCells();
 }
 
 //----------------------------------------------------------------------------------------
@@ -1067,6 +1073,16 @@ int MeshRefinement::AddToRefinement(ParArrayND<Real> pvar_cc,
 int MeshRefinement::AddToRefinement(FaceField *pvar_fc, FaceField *pcoarse_fc) {
   pvars_fc_.push_back(std::make_tuple(pvar_fc, pcoarse_fc));
   return static_cast<int>(pvars_fc_.size() - 1);
+}
+
+void MeshRefinement::CheckGhostCells() {
+  if (NGHOST % 2) {
+    std::stringstream msg;
+    msg << "### FATAL ERROR in MeshRefinement constructor" << std::endl
+        << "Selected --nghost=" << NGHOST << " is incompatible with mesh refinement.\n"
+        << "Reconfigure with an even number of ghost cells " << std::endl;
+    PARTHENON_FAIL(msg);
+  }
 }
 
 } // namespace parthenon

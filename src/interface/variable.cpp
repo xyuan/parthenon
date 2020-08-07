@@ -85,26 +85,15 @@ std::shared_ptr<CellVariable<T>> CellVariable<T>::AllocateCopy(const bool allocC
 /// Initialize a 6D variable
 template <typename T>
 void CellVariable<T>::allocateComms(MeshBlock *pmb) {
-  // set up fluxes
-  std::string base_name = label();
   if (IsSet(Metadata::Independent)) {
-    flux[X1DIR] = ParArrayND<T>(base_name + ".fluxX1", GetDim(6), GetDim(5), GetDim(4),
-                                GetDim(3), GetDim(2), GetDim(1));
-    if (GetDim(2) > 1)
-      flux[X2DIR] = ParArrayND<T>(base_name + ".fluxX2", GetDim(6), GetDim(5), GetDim(4),
-                                  GetDim(3), GetDim(2), GetDim(1));
-    if (GetDim(3) > 1)
-      flux[X3DIR] = ParArrayND<T>(base_name + ".fluxX3", GetDim(6), GetDim(5), GetDim(4),
-                                  GetDim(3), GetDim(2), GetDim(1));
+    AllocateFluxes();
   }
 
   if (!pmb) return;
 
-  if (pmb->pmy_mesh->multilevel)
-    coarse_s = ParArrayND<T>(base_name + ".coarse", GetDim(6), GetDim(5), GetDim(4),
-                             pmb->c_cellbounds.ncellsk(IndexDomain::entire),
-                             pmb->c_cellbounds.ncellsj(IndexDomain::entire),
-                             pmb->c_cellbounds.ncellsi(IndexDomain::entire));
+  if (pmb->pmy_mesh->multilevel) {
+    AllocateCoarseCells(pmb->c_cellbounds);
+  }
 
   // Create the boundary object
   vbvar = std::make_shared<CellCenteredBoundaryVariable>(pmb, data, coarse_s, flux);
@@ -114,7 +103,32 @@ void CellVariable<T>::allocateComms(MeshBlock *pmb) {
   pmb->pbval->bvars.push_back(vbvar);
   pmb->pbval->bvars_main_int.push_back(vbvar);
 
+  // TODO(JMM): Should this be above the meshblock return statement?
   mpiStatus = false;
+}
+
+template <typename T>
+void CellVariable<T>::AllocateFluxes() {
+  std::string base_name = label();
+  flux[X1DIR] = ParArrayND<T>(base_name + ".fluxX1", GetDim(6), GetDim(5), GetDim(4),
+                              GetDim(3), GetDim(2), GetDim(1));
+  if (GetDim(2) > 1) {
+    flux[X2DIR] = ParArrayND<T>(base_name + ".fluxX2", GetDim(6), GetDim(5), GetDim(4),
+                                GetDim(3), GetDim(2), GetDim(1));
+  }
+  if (GetDim(3) > 1) {
+    flux[X3DIR] = ParArrayND<T>(base_name + ".fluxX3", GetDim(6), GetDim(5), GetDim(4),
+                                GetDim(3), GetDim(2), GetDim(1));
+  }
+}
+
+template <typename T>
+void CellVariable<T>::AllocateCoarseCells(const IndexShape &c_cellbounds) {
+  std::string base_name = label();
+  coarse_s = ParArrayND<T>(base_name + ".coarse", GetDim(6), GetDim(5), GetDim(4),
+                           c_cellbounds.ncellsk(IndexDomain::entire),
+                           c_cellbounds.ncellsj(IndexDomain::entire),
+                           c_cellbounds.ncellsi(IndexDomain::entire));
 }
 
 // TODO(jcd): clean these next two info routines up
