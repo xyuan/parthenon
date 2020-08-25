@@ -75,9 +75,8 @@ class RestartReader {
 
       /** Define memory dataspace **/
       hid_t memspace = H5Screate_simple(5, count, NULL);
-      hsize_t offsetMem[5] = {0, 0, 0, 0, 0};
       status =
-          H5Sselect_hyperslab(dataspace, H5S_SELECT_SET, offsetMem, NULL, count, NULL);
+          H5Sselect_hyperslab(dataspace, H5S_SELECT_SET, offset, NULL, count, NULL);
 
       // Read data from file
       status =
