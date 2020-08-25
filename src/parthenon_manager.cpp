@@ -89,7 +89,16 @@ ParthenonStatus ParthenonManager::ParthenonInit(int argc, char *argv[]) {
   if (arg.input_filename != nullptr) {
     pinput = std::make_unique<ParameterInput>(arg.input_filename);
   } else if (arg.res_flag != 0) {
+    // Open restart file
+    restartReader = std::make_unique<RestartReader>(arg.restart_filename);
+
     pinput = std::make_unique<ParameterInput>();
+    
+    // Load input stream
+    std::string inputString = restartReader->ReadAttrString("Input", "File");
+    std::istringstream is(inputString);
+    pinput->LoadFromStream(is);
+
   }
   pinput->ModifyFromCmdline(argc, argv);
 
@@ -103,14 +112,6 @@ ParthenonStatus ParthenonManager::ParthenonInit(int argc, char *argv[]) {
   if (arg.res_flag == 0) {
     pmesh = std::make_unique<Mesh>(pinput.get(), properties, packages, arg.mesh_flag);
   } else {
-    // Open restart file
-    restartReader = std::make_unique<RestartReader>(arg.restart_filename);
-
-    // Load input stream
-    std::string inputString = restartReader->ReadAttrString("Input", "File");
-    std::istringstream is(inputString);
-    pinput->LoadFromStream(is);
-
     // Read Mesh from restart file and create meshblocks
     pmesh = std::make_unique<Mesh>(pinput.get(), *restartReader, properties, packages);
 
@@ -223,11 +224,16 @@ void ParthenonManager::RestartPackages(Mesh &rm, RestartReader &resfile) {
     hsize_t index = 0;
     while (pmb != nullptr) {
       // std::cout << pmb->gid << ":" << pmb->real_containers.Get() << std::endl;
-      auto cX = ContainerIterator<Real>(pmb->real_containers.Get(), {vName});
+      auto cX = ContainerIterator<Real>(
+          pmb->real_containers.Get(),
+          {parthenon::Metadata::Independent, parthenon::Metadata::Restart}, true);
       for (auto &v : cX.vars) {
-        auto v_h = (*v).data.GetHostMirrorAndCopy();
-        UNLOADVARIABLEONE(index, tmp, v_h, out_ib.s, out_ib.e, out_jb.s, out_jb.e,
-                          out_kb.s, out_kb.e, v4)
+        if (vName.compare(v->label()) == 0) {
+          auto v_h = (*v).data.GetHostMirrorAndCopy();
+          UNLOADVARIABLEONE(index, tmp, v_h, out_ib.s, out_ib.e, out_jb.s, out_jb.e,
+                            out_kb.s, out_kb.e, v4);
+          break;
+        }
       }
       pmb = pmb->next;
     }
