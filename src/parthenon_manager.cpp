@@ -112,9 +112,6 @@ ParthenonStatus ParthenonManager::ParthenonInit(int argc, char *argv[]) {
   if (arg.res_flag == 0) {
     pmesh = std::make_unique<Mesh>(pinput.get(), properties, packages, arg.mesh_flag);
   } else {
-    // Read Mesh from restart file and create meshblocks
-    pmesh = std::make_unique<Mesh>(pinput.get(), *restartReader, properties, packages);
-
     // Read simulation time and cycle from restart file and set in input
     Real tNow = restartReader->GetAttr<Real>("Info", "Time");
     pinput->SetPrecise("parthenon/time", "start_time", tNow);
@@ -124,6 +121,9 @@ ParthenonStatus ParthenonManager::ParthenonInit(int argc, char *argv[]) {
 
     int ncycle = restartReader->GetAttr<int32_t>("Info", "NCycle");
     pinput->SetInteger("parthenon/time", "ncycle", ncycle);
+
+    // Read Mesh from restart file and create meshblocks
+    pmesh = std::make_unique<Mesh>(pinput.get(), *restartReader, properties, packages);
 
     // Read package data from restart file
     RestartPackages(*pmesh, *restartReader);
