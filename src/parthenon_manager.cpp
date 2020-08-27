@@ -93,12 +93,11 @@ ParthenonStatus ParthenonManager::ParthenonInit(int argc, char *argv[]) {
     restartReader = std::make_unique<RestartReader>(arg.restart_filename);
 
     pinput = std::make_unique<ParameterInput>();
-    
+
     // Load input stream
     std::string inputString = restartReader->ReadAttrString("Input", "File");
     std::istringstream is(inputString);
     pinput->LoadFromStream(is);
-
   }
   pinput->ModifyFromCmdline(argc, argv);
 
@@ -205,7 +204,7 @@ void ParthenonManager::RestartPackages(Mesh &rm, RestartReader &resfile) {
       vlen = v->GetDim(4);
     }
   }
-  Real *tmp = new Real[static_cast<size_t>(nb) * nCells * vlen];
+  std::vector<Real> tmp(static_cast<size_t>(nb) * nCells * vlen);
   std::cout << "SIZES:" << nb << ":" << vlen << ":"
             << static_cast<size_t>(nb) * nCells * vlen << std::endl;
   for (auto &v : ciX.vars) {
@@ -214,7 +213,7 @@ void ParthenonManager::RestartPackages(Mesh &rm, RestartReader &resfile) {
 
     std::cout << "Var:" << vName << ":" << v4 << std::endl;
     // Read relevant data from the hdf file
-    int stat = resfile.ReadBlocks(vName.c_str(), myBlocks, tmp, v4);
+    int stat = resfile.ReadBlocks(vName.c_str(), myBlocks, tmp.data(), v4);
     if (stat < 0) {
       std::cout << " WARNING: Variable " << v->label() << " Not found in restart file";
       continue;
@@ -223,6 +222,7 @@ void ParthenonManager::RestartPackages(Mesh &rm, RestartReader &resfile) {
     auto pmb = rm.pblock;
     hsize_t index = 0;
     while (pmb != nullptr) {
+      bool found = false;
       // std::cout << pmb->gid << ":" << pmb->real_containers.Get() << std::endl;
       auto cX = ContainerIterator<Real>(
           pmb->real_containers.Get(),
@@ -232,12 +232,16 @@ void ParthenonManager::RestartPackages(Mesh &rm, RestartReader &resfile) {
           auto v_h = (*v).data.GetHostMirrorAndCopy();
           UNLOADVARIABLEONE(index, tmp, v_h, out_ib.s, out_ib.e, out_jb.s, out_jb.e,
                             out_kb.s, out_kb.e, v4);
+	  (*v).data.DeepCopy(v_h);
+	  found = true;
           break;
         }
+      }
+      if ( ! found ) {
+	PARTHENON_FAIL("Variable not found in restart file");
       }
       pmb = pmb->next;
     }
   }
-  delete[] tmp;
 }
 } // namespace parthenon
