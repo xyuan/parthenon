@@ -190,6 +190,7 @@ MeshBlock::MeshBlock(int igid, int ilid, Mesh *pm, ParameterInput *pin,
 
   // Boundary
   pbval = std::make_unique<BoundaryValues>(this, input_bcs, pin);
+  pbval->SetBoundaryFlags(boundary_flag);
 
   // Reconstruction (constructor may implicitly depend on Coordinates)
   precon = std::make_unique<Reconstruction>(this, pin);
