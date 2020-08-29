@@ -125,8 +125,8 @@ Outputs::Outputs(Mesh *pm, ParameterInput *pin, SimTime *tm) {
   pfirst_type_ = nullptr;
   std::stringstream msg;
   InputBlock *pib = pin->pfirst_block;
-  OutputType *pnew_type;
-  OutputType *plast = pfirst_type_;
+  OutputType *pnew_type = nullptr;
+  OutputType *plast = pfirst_type_ = nullptr;
   int num_hst_outputs = 0, num_rst_outputs = 0; // number of history and restart outputs
 
   // loop over input block names.  Find those that start with "parthenon/output", read

@@ -485,6 +485,28 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin, SimTime *tm) 
     delete[] tmpID;
   }
 
+  // write refinement internals if required
+  if (pm->adaptive) {
+    // Mesh refinement internals
+    hsize_t n = 4;
+    std::vector<int> tmpMR(num_blocks_local * n);
+    local_count[1] = global_count[1] = n;
+    local_count[0] = num_blocks_local;
+    global_count[0] = max_blocks_global;
+    pmb = pm->pblock;
+    hsize_t i = 0;
+    while (pmb != nullptr) {
+      auto pmrInternal = pmb->pmr->GetInternals();
+      tmpMR[i++] = pmrInternal[0];
+      tmpMR[i++] = pmrInternal[1];
+      tmpMR[i++] = pmrInternal[2];
+      tmpMR[i++] = pmrInternal[3];
+      pmb = pmb->next;
+    }
+    WRITEH5SLABI32("refinementInternals", tmpMR.data(), gBlocks, local_start, local_count,
+                   global_count, property_list);
+  }
+
   // close locations tab
   H5Gclose(gBlocks);
 
