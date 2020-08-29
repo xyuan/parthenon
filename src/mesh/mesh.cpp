@@ -646,6 +646,8 @@ Mesh::Mesh(ParameterInput *pin, ApplicationInput *app_in, RestartReader &rr,
 
   InitUserMeshData(pin);
 
+  nbnew = rr.GetAttr<int>("Mesh", "nbnew");
+  nbdel = rr.GetAttr<int>("Mesh", "nbdel");
   // Populate logical locations
   auto lx123 = rr.ReadDataset<int64_t>("/Blocks/loc.lx123");
   auto locLevelGidLidCnghostGflag =
@@ -733,8 +735,8 @@ Mesh::Mesh(ParameterInput *pin, ApplicationInput *app_in, RestartReader &rr,
     SetBlockSizeAndBoundaries(loclist[i], block_size, block_bcs);
 
     // create a block and add into the link list
-    block_list.emplace_back(i, i - nbs, this, pin, app_in, properties, packages,
-                            loclist[i], block_size, block_bcs, costlist[i], gflag);
+    block_list.emplace_back(i, i - nbs, loclist[i], block_size, block_bcs, this, pin,
+                            app_in, properties, packages, gflag);
     block_list.back().pbval->SearchAndSetNeighbors(tree, ranklist.data(), nslist.data());
   }
 
