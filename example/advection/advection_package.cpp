@@ -47,6 +47,8 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin) {
   pkg->AddParam<>("refine_tol", refine_tol);
   Real derefine_tol = pin->GetOrAddReal("Advection", "derefine_tol", 0.03);
   pkg->AddParam<>("derefine_tol", derefine_tol);
+  int refine_interval = pin->GetOrAddInteger("Advection", "refine_interval", 1);
+  pkg->AddParam<>("refine_interval", refine_interval);
 
   auto profile_str = pin->GetOrAddString("Advection", "profile", "wave");
   if (!((profile_str.compare("wave") == 0) ||
@@ -164,6 +166,7 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin) {
 
 AmrTag CheckRefinement(std::shared_ptr<Container<Real>> &rc) {
   MeshBlock *pmb = rc->pmy_block;
+
   // refine on advected, for example.  could also be a derived quantity
   auto v = rc->Get("advected").data;
 
