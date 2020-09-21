@@ -740,6 +740,17 @@ Mesh::Mesh(ParameterInput *pin, ApplicationInput *app_in, RestartReader &rr,
     block_list.back().pbval->SearchAndSetNeighbors(tree, ranklist.data(), nslist.data());
   }
 
+  // Read in mesh refinement variables
+  if (adaptive) {
+    auto mrI = rr.ReadDataset<int32_t>("/Blocks/refinementInternals");
+    auto pmb = pfirst;
+    hsize_t index = 0;
+    for (auto &mb : block_list) {
+      mb.pmr->SetInternals({mrI[index], mrI[index + 1], mrI[index + 2], mrI[index + 3]});
+      index += 4;
+    }
+  }
+
   ResetLoadBalanceVariables();
 }
 

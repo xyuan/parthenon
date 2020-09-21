@@ -75,6 +75,16 @@ class MeshRefinement {
   // and/or in BoundaryValues::ProlongateBoundaries() (for SMR and AMR)
   int AddToRefinement(ParArrayND<Real> pvar_cc, ParArrayND<Real> pcoarse_cc);
   int AddToRefinement(FaceField *pvar_fc, FaceField *pcoarse_fc);
+  std::vector<int> GetInternals() {
+    return std::vector<int>(
+        {refine_flag_, neighbor_rflag_, deref_count_, deref_threshold_});
+  }
+  void SetInternals(std::vector<int> a) {
+    refine_flag_ = a[0];
+    neighbor_rflag_ = a[1];
+    deref_count_ = a[2];
+    deref_threshold_ = a[3];
+  }
 
  private:
   // data

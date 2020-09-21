@@ -367,15 +367,35 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin, SimTime *tm) 
     local_count[0] = num_blocks_local;
     global_count[0] = max_blocks_global;
     i = 0;
-    for (auto &pmb : pm->block_list) {
-      tmpID[i++] = pmb.loc.level;
-      tmpID[i++] = pmb.gid;
-      tmpID[i++] = pmb.lid;
-      tmpID[i++] = pmb.cnghost;
-      tmpID[i++] = pmb.gflag;
+    for (auto &mb : pm->block_list) {
+      tmpID[i++] = mb.loc.level;
+      tmpID[i++] = mb.gid;
+      tmpID[i++] = mb.lid;
+      tmpID[i++] = mb.cnghost;
+      tmpID[i++] = mb.gflag;
     }
     WRITEH5SLABI32("loc.level-gid-lid-cnghost-gflag", tmpID.data(), gBlocks, local_start,
                    local_count, global_count, property_list);
+  }
+
+  // write refinement internals if required
+  if (pm->adaptive) {
+    // Mesh refinement internals
+    hsize_t n = 4;
+    std::vector<int> tmpMR(num_blocks_local * n);
+    local_count[1] = global_count[1] = n;
+    local_count[0] = num_blocks_local;
+    global_count[0] = max_blocks_global;
+    hsize_t i = 0;
+    for (auto &mb : pm->block_list) {
+      auto pmrInternal = mb.pmr->GetInternals();
+      tmpMR[i++] = pmrInternal[0];
+      tmpMR[i++] = pmrInternal[1];
+      tmpMR[i++] = pmrInternal[2];
+      tmpMR[i++] = pmrInternal[3];
+    }
+    WRITEH5SLABI32("refinementInternals", tmpMR.data(), gBlocks, local_start, local_count,
+                   global_count, property_list);
   }
 
   // close locations tab
