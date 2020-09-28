@@ -751,7 +751,7 @@ Mesh::Mesh(ParameterInput *pin, ApplicationInput *app_in, RestartReader &rr,
     auto pmb = pfirst;
     hsize_t index = 0;
     for (auto &mb : block_list) {
-      mb.pmr->SetInternals({mrI[index], mrI[index + 1], mrI[index + 2], mrI[index + 3]});
+      mb->pmr->SetInternals({mrI[index], mrI[index + 1], mrI[index + 2], mrI[index + 3]});
       index += 4;
     }
   }

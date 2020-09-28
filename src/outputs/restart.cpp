@@ -367,12 +367,12 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin, SimTime *tm) 
     local_count[0] = num_blocks_local;
     global_count[0] = max_blocks_global;
     i = 0;
-    for (auto &mb : pm->block_list) {
-      tmpID[i++] = mb.loc.level;
-      tmpID[i++] = mb.gid;
-      tmpID[i++] = mb.lid;
-      tmpID[i++] = mb.cnghost;
-      tmpID[i++] = mb.gflag;
+    for (auto &pmb : pm->block_list) {
+      tmpID[i++] = pmb->loc.level;
+      tmpID[i++] = pmb->gid;
+      tmpID[i++] = pmb->lid;
+      tmpID[i++] = pmb->cnghost;
+      tmpID[i++] = pmb->gflag;
     }
     WRITEH5SLABI32("loc.level-gid-lid-cnghost-gflag", tmpID.data(), gBlocks, local_start,
                    local_count, global_count, property_list);
@@ -388,7 +388,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin, SimTime *tm) 
     global_count[0] = max_blocks_global;
     hsize_t i = 0;
     for (auto &mb : pm->block_list) {
-      auto pmrInternal = mb.pmr->GetInternals();
+      auto pmrInternal = mb->pmr->GetInternals();
       tmpMR[i++] = pmrInternal[0];
       tmpMR[i++] = pmrInternal[1];
       tmpMR[i++] = pmrInternal[2];
