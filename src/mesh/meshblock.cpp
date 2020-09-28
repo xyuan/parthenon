@@ -60,14 +60,22 @@ MeshBlock::MeshBlock(const int n_side, const int ndim)
   }
 }
 
-MeshBlock::MeshBlock(int igid, int ilid, LogicalLocation iloc, RegionSize input_block,
-                     BoundaryFlag *input_bcs, Mesh *pm, ParameterInput *pin,
-                     ApplicationInput *app_in, Properties_t &properties,
-                     Packages_t &packages, int igflag, bool ref_flag)
-    : exec_space(DevExecSpace()), pmy_mesh(pm), loc(iloc), block_size(input_block),
-      gid(igid), lid(ilid), gflag(igflag), properties(properties),
-      packages(packages), new_block_dt_{}, new_block_dt_hyperbolic_{},
-      new_block_dt_parabolic_{}, new_block_dt_user_{}, cost_(1.0) {
+void MeshBlock::Initialize(int igid, int ilid, LogicalLocation iloc,
+                           RegionSize input_block, BoundaryFlag *input_bcs, Mesh *pm,
+                           ParameterInput *pin, ApplicationInput *app_in,
+                           Properties_t &properties, Packages_t &packages, int igflag,
+                           double icost) {
+  exec_space = DevExecSpace();
+  pmy_mesh = pm;
+  loc = iloc;
+  block_size = input_block;
+  gid = igid;
+  lid = ilid;
+  gflag = igflag;
+  this->properties = properties;
+  this->packages = packages;
+  cost_ = icost;
+
   // initialize grid indices
   if (pmy_mesh->ndim >= 3) {
     InitializeIndexShapes(block_size.nx1, block_size.nx2, block_size.nx3);
@@ -96,7 +104,7 @@ MeshBlock::MeshBlock(int igid, int ilid, LogicalLocation iloc, RegionSize input_
 
   auto &real_container = real_containers.Get();
   // Set the block pointer for the containers
-  real_container->setBlock(this);
+  real_container->SetBlockPointer(shared_from_this());
 
   // (probably don't need to preallocate space for references in these vectors)
   vars_cc_.reserve(3);
@@ -109,13 +117,13 @@ MeshBlock::MeshBlock(int igid, int ilid, LogicalLocation iloc, RegionSize input_
 
   // mesh-related objects
   // Boundary
-  pbval = std::make_unique<BoundaryValues>(this, input_bcs, pin);
+  pbval = std::make_unique<BoundaryValues>(shared_from_this(), input_bcs, pin);
   pbval->SetBoundaryFlags(boundary_flag);
 
   // Reconstruction: constructor may implicitly depend on Coordinates, and PPM variable
   // floors depend on EOS, but EOS isn't needed in Reconstruction constructor-> this is
   // ok
-  precon = std::make_unique<Reconstruction>(this, pin);
+  precon = std::make_unique<Reconstruction>(shared_from_this(), pin);
 
   // Add field properties data
   for (int i = 0; i < properties.size(); i++) {
@@ -149,7 +157,7 @@ MeshBlock::MeshBlock(int igid, int ilid, LogicalLocation iloc, RegionSize input_
   }
 
   if (pm->multilevel) {
-    pmr = std::make_unique<MeshRefinement>(this, pin);
+    pmr = std::make_unique<MeshRefinement>(shared_from_this(), pin);
     // This is very redundant, I think, but necessary for now
     for (int n = 0; n < nindependent; n++) {
       pmr->AddToRefinement(ci.vars[n]->data, ci.vars[n]->coarse_s);
@@ -159,6 +167,7 @@ MeshBlock::MeshBlock(int igid, int ilid, LogicalLocation iloc, RegionSize input_
   // Create user mesh data
   // InitUserMeshBlockData(pin);
   app = InitApplicationMeshBlockData(pin);
+  return;
 }
 
 //----------------------------------------------------------------------------------------
@@ -212,11 +221,7 @@ void MeshBlock::ResetTimeMeasurement() {
 
 void MeshBlock::StartTimeMeasurement() {
   if (pmy_mesh->lb_automatic_) {
-#ifdef OPENMP_PARALLEL
-    lb_time_ = omp_get_wtime();
-#else
-    lb_time_ = static_cast<double>(clock());
-#endif
+    lb_timer.reset();
   }
 }
 
@@ -226,12 +231,7 @@ void MeshBlock::StartTimeMeasurement() {
 
 void MeshBlock::StopTimeMeasurement() {
   if (pmy_mesh->lb_automatic_) {
-#ifdef OPENMP_PARALLEL
-    lb_time_ = omp_get_wtime() - lb_time_;
-#else
-    lb_time_ = static_cast<double>(clock()) - lb_time_;
-#endif
-    cost_ += lb_time_;
+    cost_ += lb_timer.seconds();
   }
 }
 
