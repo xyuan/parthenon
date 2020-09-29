@@ -411,6 +411,7 @@ class Mesh {
       &UserWorkAfterLoopDefault;
   static void UserWorkInLoopDefault(); // called in main after each cycle
   std::function<void()> UserWorkInLoop = &UserWorkInLoopDefault;
+  int GetNbs() {return nslist[Globals::my_rank];}
   int GetRootLevel() const noexcept { return root_level; }
   int GetMaxLevel() const noexcept { return max_level; }
   int GetCurrentLevel() const noexcept { return current_level; }

@@ -197,7 +197,8 @@ void ParthenonManager::RestartPackages(Mesh &rm, RestartReader &resfile) {
   // Get block list and temp array size
   auto &mb = *(rm.block_list.front());
   int nb = rm.GetNumMeshBlocksThisRank(Globals::my_rank);
-  int nbs = mb.gid;
+  int nbs = rm.GetNbs();
+  //  int nbs = mb.gid;
   int nbe = nbs + nb - 1;
   IndexRange myBlocks{nbs, nbe};
 
@@ -244,9 +245,11 @@ void ParthenonManager::RestartPackages(Mesh &rm, RestartReader &resfile) {
           {parthenon::Metadata::Independent, parthenon::Metadata::Restart}, true);
       for (auto &v : cX.vars) {
         if (vName.compare(v->label()) == 0) {
+	  // TODO(sriram) check whether deep copy is needed here.
           auto v_h = (*v).data.GetHostMirrorAndCopy();
           UNLOADVARIABLEONE(index, tmp, v_h, out_ib.s, out_ib.e, out_jb.s, out_jb.e,
                             out_kb.s, out_kb.e, v4)
+	  (*v).data.DeepCopy(v_h);
           found = true;
           break;
         }
