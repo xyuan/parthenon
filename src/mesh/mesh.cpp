@@ -589,11 +589,6 @@ Mesh::Mesh(ParameterInput *pin, ApplicationInput *app_in, RestartReader &rr,
   mesh_size.x2rat = ratios[1];
   mesh_size.x3rat = ratios[2];
 
-  // TODO(sriram): Need to figure out where nCycle, time, and dt should be read
-  //  dt = rr.GetAttr<double>("Info", "dt");
-  //  time = rr.GetAttr<double>("Info", "time");
-  //  ncycle = rr.GetAttr<int32_t>("Info", "nCycle");
-
   // initialize
   loclist = std::vector<LogicalLocation>(nbtotal);
 
@@ -749,7 +744,7 @@ Mesh::Mesh(ParameterInput *pin, ApplicationInput *app_in, RestartReader &rr,
   if (adaptive) {
     auto mrI = rr.ReadDataset<int32_t>("/Blocks/refinementInternals");
     auto pmb = pfirst;
-    hsize_t index = 0;
+    hsize_t index = nbs;
     for (auto &mb : block_list) {
       mb->pmr->SetInternals({mrI[index], mrI[index + 1], mrI[index + 2], mrI[index + 3]});
       index += 4;
