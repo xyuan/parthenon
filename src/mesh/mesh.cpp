@@ -708,6 +708,7 @@ Mesh::Mesh(ParameterInput *pin, ApplicationInput *app_in, RestartReader &rr,
     bddisp = std::vector<int>(Globals::nranks);
   }
 
+  for ( auto &c : costlist) {c = 1.0;}
   CalculateLoadBalance(costlist, ranklist, nslist, nblist);
 
   // Output MeshBlock list and quit (mesh test only); do not create meshes
