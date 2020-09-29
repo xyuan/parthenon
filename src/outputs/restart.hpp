@@ -86,7 +86,7 @@ class RestartReader {
       hid_t memspace = H5Screate_simple(5, count, NULL);
       hsize_t offsetMem[5] = {0, 0, 0, 0, 0};
       status =
-          H5Sselect_hyperslab(dataspace, H5S_SELECT_SET, offsetMem, NULL, count, NULL);
+          H5Sselect_hyperslab(memspace, H5S_SELECT_SET, offsetMem, NULL, count, NULL);
 
       // Read data from file
       status =
@@ -116,6 +116,7 @@ class RestartReader {
   std::vector<T> ReadDataset(const char *name, size_t *count = nullptr) {
     // Returns entire 1D array.
     // status, never checked.  We should...
+    std::vector<T> data;
 #ifdef HDF5OUTPUT
     herr_t status;
 
@@ -138,7 +139,7 @@ class RestartReader {
       *count = isize;
     }
 
-    std::vector<T> data(isize);
+    data.resize(isize);
     /** Define memory dataspace **/
     hid_t memspace = H5Screate_simple(rank, dims.data(), NULL);
 
@@ -150,8 +151,6 @@ class RestartReader {
     H5Sclose(filespace);
     H5Sclose(dataspace);
     H5Dclose(dataset);
-#else
-    std::vector<T> data;
 #endif
     return data;
   }
