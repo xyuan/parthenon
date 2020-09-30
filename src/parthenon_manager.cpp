@@ -245,11 +245,11 @@ void ParthenonManager::RestartPackages(Mesh &rm, RestartReader &resfile) {
           {parthenon::Metadata::Independent, parthenon::Metadata::Restart}, true);
       for (auto &v : cX.vars) {
         if (vName.compare(v->label()) == 0) {
-	  // TODO(sriram) check whether deep copy is needed here.
+          // TODO(sriram) check whether deep copy is needed here.
           auto v_h = (*v).data.GetHostMirrorAndCopy();
           UNLOADVARIABLEONE(index, tmp, v_h, out_ib.s, out_ib.e, out_jb.s, out_jb.e,
                             out_kb.s, out_kb.e, v4)
-	  (*v).data.DeepCopy(v_h);
+          (*v).data.DeepCopy(v_h);
           found = true;
           break;
         }
